@@ -1,0 +1,17 @@
+# Core
+docker>=6.1.0
+pyyaml>=6.0
+structlog>=23.0
+click>=8.1
+
+# Agent communication
+requests>=2.31.0
+httpx>=0.24.0
+
+# Report generation
+jinja2>=3.1
+matplotlib>=3.7
+
+# Dev/testing
+pytest>=7.4
+pytest-cov>=4.1

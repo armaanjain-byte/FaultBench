@@ -1,0 +1,25 @@
+# FaultBench Configuration
+# ========================
+# Global defaults — override with CLI flags or environment variables.
+
+agent:
+  default: openhands
+  model: claude-sonnet-4-20250514
+  max_iterations: 30
+  poll_interval_seconds: 5.0
+
+sandbox:
+  image: faultbench-sandbox:latest
+  memory_limit: 512m
+  cpu_quota: 50000          # 50% of one core
+  max_runtime_seconds: 900  # 15 min hard cap per run
+
+paths:
+  db: db/faultbench.db
+  logs: logs/
+  reports: reports/
+  tasks: tasks/
+
+benchmark:
+  min_runs_for_comparison: 5   # refuse to compare with fewer runs
+  default_runs: 10
