@@ -1,0 +1,91 @@
+mutations:
+  - mutation_type: schema_drift
+    description: "Rename the 'content' template variable to 'body' in base.html"
+    causal_path: >
+      templates.py renders the Jinja template with a variable named 'content'.
+      Renaming it to 'body' in base.html means the template renders an empty
+      body. The agent must reconcile the variable name before verifying that
+      HTML (not raw Markdown) is being injected.
+    actions:
+      - action: replace_string
+        target: templates/base.html
+        details:
+          old_value: "{{ content }}"
+          new_value: "{{ body }}"
+    rollback_actions:
+      - action: replace_string
+        target: templates/base.html
+        details:
+          old_value: "{{ body }}"
+          new_value: "{{ content }}"
+
+  - mutation_type: dependency_drift
+    description: "Replace 'markdown' dependency with a non-existent 'markdown-ng>=99.0'"
+    causal_path: >
+      parser.py uses the 'markdown' library to convert Markdown to HTML.
+      Replacing it with a fake package causes pip install to fail, blocking
+      the agent from running the generator or its tests.
+    actions:
+      - action: replace_string
+        target: requirements.txt
+        details:
+          old_value: "markdown>=3.5"
+          new_value: "markdown-ng>=99.0"
+    rollback_actions:
+      - action: replace_string
+        target: requirements.txt
+        details:
+          old_value: "markdown-ng>=99.0"
+          new_value: "markdown>=3.5"
+
+  - mutation_type: config_corruption
+    description: "Set the template path to a non-existent directory"
+    causal_path: >
+      config.yaml specifies the template directory. Pointing it to
+      'nonexistent_templates/' causes a Jinja TemplateNotFound error when the
+      generator tries to load base.html, preventing the agent from running
+      the site generator.
+    actions:
+      - action: replace_string
+        target: config.yaml
+        details:
+          old_value: "template_dir: templates"
+          new_value: "template_dir: nonexistent_templates"
+    rollback_actions:
+      - action: replace_string
+        target: config.yaml
+        details:
+          old_value: "template_dir: nonexistent_templates"
+          new_value: "template_dir: templates"
+
+  - mutation_type: missing_file
+    description: "Delete the base.html template file"
+    causal_path: >
+      templates.py loads base.html from the template directory via Jinja.
+      Without it the generator raises TemplateNotFound. The agent must
+      recreate the template before the rendering bug can be observed or fixed.
+    actions:
+      - action: delete_file
+        target: templates/base.html
+    rollback_actions:
+      - action: restore_file
+        target: templates/base.html
+
+  - mutation_type: api_contract_drift
+    description: "Rename render_page() to build_page() in templates.py"
+    causal_path: >
+      generator.py calls templates.render_page(). Renaming it to build_page()
+      causes an AttributeError at generation time, preventing the agent from
+      running the generator until the function name mismatch is resolved.
+    actions:
+      - action: replace_string
+        target: templates.py
+        details:
+          old_value: "def render_page("
+          new_value: "def build_page("
+    rollback_actions:
+      - action: replace_string
+        target: templates.py
+        details:
+          old_value: "def build_page("
+          new_value: "def render_page("

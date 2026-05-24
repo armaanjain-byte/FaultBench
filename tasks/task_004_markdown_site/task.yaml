@@ -1,0 +1,11 @@
+name: task_004_markdown_site
+description: "Static site generator with broken template rendering"
+instruction: "The templates.py module passes raw Markdown source text to the Jinja2 template instead of the rendered HTML. Fix templates.py so that Markdown content is converted to HTML before being injected into the template."
+verify_command: "cd {task_dir} && bash verify.sh"
+valid_mutations:
+  - schema_drift
+  - dependency_drift
+  - config_corruption
+  - missing_file
+  - api_contract_drift
+timeout_seconds: 900

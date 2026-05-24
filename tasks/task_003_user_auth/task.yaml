@@ -1,0 +1,11 @@
+name: task_003_user_auth
+description: "User authentication module with token-expiration vulnerability"
+instruction: "The verify_token function in token_manager.py does not check token expiration. Expired JWT tokens are accepted as valid, which is a security vulnerability. Fix verify_token so that expired tokens are rejected with an appropriate error."
+verify_command: "cd {task_dir} && bash verify.sh"
+valid_mutations:
+  - schema_drift
+  - dependency_drift
+  - config_corruption
+  - missing_file
+  - api_contract_drift
+timeout_seconds: 900

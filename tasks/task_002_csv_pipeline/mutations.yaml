@@ -1,0 +1,104 @@
+mutations:
+  - mutation_type: schema_drift
+    description: "Rename the 'amount' column to 'total_price' in the input CSV"
+    causal_path: >
+      transformers.py reads the 'amount' column to compute running totals.
+      Renaming it to 'total_price' in the CSV causes a KeyError during
+      transformation, blocking the agent from running the pipeline until the
+      column reference is reconciled.
+    actions:
+      - action: rename_column
+        target: data/sample_input.csv
+        details:
+          old_name: amount
+          new_name: total_price
+    rollback_actions:
+      - action: rename_column
+        target: data/sample_input.csv
+        details:
+          old_name: total_price
+          new_name: amount
+
+  - mutation_type: dependency_drift
+    description: "Replace the real 'pyyaml' dependency with a fake package 'pyyaml-nightly>=99.0'"
+    causal_path: >
+      config.yaml is loaded via PyYAML. Replacing the dependency with a
+      non-existent package means pip install fails and the config cannot be
+      read, preventing the pipeline from running at all.
+    actions:
+      - action: replace_string
+        target: requirements.txt
+        details:
+          old_value: "pyyaml>=6.0"
+          new_value: "pyyaml-nightly>=99.0"
+    rollback_actions:
+      - action: replace_string
+        target: requirements.txt
+        details:
+          old_value: "pyyaml-nightly>=99.0"
+          new_value: "pyyaml>=6.0"
+
+  - mutation_type: config_corruption
+    description: "Swap the input and output paths in config.yaml"
+    causal_path: >
+      The pipeline reads config.yaml to locate its input CSV and output JSON
+      paths. Swapping them causes the pipeline to try to parse the JSON output
+      directory as a CSV, producing an immediate read error that masks the
+      underlying bug.
+    actions:
+      - action: replace_string
+        target: config.yaml
+        details:
+          old_value: "input_path: data/sample_input.csv"
+          new_value: "input_path: data/output.json"
+      - action: replace_string
+        target: config.yaml
+        details:
+          old_value: "output_path: data/output.json"
+          new_value: "output_path: data/sample_input.csv"
+    rollback_actions:
+      - action: replace_string
+        target: config.yaml
+        details:
+          old_value: "input_path: data/output.json"
+          new_value: "input_path: data/sample_input.csv"
+      - action: replace_string
+        target: config.yaml
+        details:
+          old_value: "output_path: data/sample_input.csv"
+          new_value: "output_path: data/output.json"
+
+  - mutation_type: missing_file
+    description: "Delete the sample input CSV file"
+    causal_path: >
+      The pipeline's first step reads data/sample_input.csv. Without it the
+      pipeline raises FileNotFoundError immediately. The agent must recreate
+      or supply the input data before it can reproduce and fix the
+      running-total bug.
+    actions:
+      - action: delete_file
+        target: data/sample_input.csv
+    rollback_actions:
+      - action: restore_file
+        target: data/sample_input.csv
+
+  - mutation_type: api_contract_drift
+    description: "Rename the transform function from 'calculate_running_totals' to 'compute_cumulative_sums'"
+    causal_path: >
+      pipeline.py calls transformers.calculate_running_totals(). Renaming the
+      function in transformers.py to compute_cumulative_sums causes an
+      AttributeError when the pipeline tries to invoke the old name. The agent
+      must discover and fix the name mismatch before it can address the
+      off-by-one bug.
+    actions:
+      - action: replace_string
+        target: transformers.py
+        details:
+          old_value: "def calculate_running_totals("
+          new_value: "def compute_cumulative_sums("
+    rollback_actions:
+      - action: replace_string
+        target: transformers.py
+        details:
+          old_value: "def compute_cumulative_sums("
+          new_value: "def calculate_running_totals("

@@ -1,0 +1,103 @@
+mutations:
+  - mutation_type: schema_drift
+    description: "Rename the 'password_hash' column to 'hashed_pw' in the users table"
+    causal_path: >
+      auth.py reads and writes the password_hash field during registration and
+      login. Renaming it in the database schema (database.py) causes an
+      OperationalError on any user lookup, preventing the agent from testing
+      login flows and the token-expiration fix.
+    actions:
+      - action: rename_column
+        target: database.py
+        details:
+          table: users
+          old_name: password_hash
+          new_name: hashed_pw
+    rollback_actions:
+      - action: rename_column
+        target: database.py
+        details:
+          table: users
+          old_name: hashed_pw
+          new_name: password_hash
+
+  - mutation_type: dependency_drift
+    description: "Pin PyJWT to a non-existent version >=99.0.0"
+    causal_path: >
+      token_manager.py imports jwt (PyJWT) for token creation and verification.
+      Pinning to a non-existent version makes pip install fail, blocking the
+      agent from running any code that touches tokens.
+    actions:
+      - action: replace_string
+        target: requirements.txt
+        details:
+          old_value: "pyjwt>=2.8.0"
+          new_value: "pyjwt>=99.0.0"
+    rollback_actions:
+      - action: replace_string
+        target: requirements.txt
+        details:
+          old_value: "pyjwt>=99.0.0"
+          new_value: "pyjwt>=2.8.0"
+
+  - mutation_type: config_corruption
+    description: "Set the JWT secret key to an empty string in config.yaml"
+    causal_path: >
+      token_manager.py reads the secret_key from config.yaml and uses it to
+      sign and verify JWTs. An empty secret key causes jwt.encode() to raise
+      a ValueError, so no tokens can be created or verified until the config
+      is fixed.
+    actions:
+      - action: replace_string
+        target: config.yaml
+        details:
+          old_value: "secret_key: super-secret-benchmark-key-do-not-use"
+          new_value: "secret_key: \"\""
+    rollback_actions:
+      - action: replace_string
+        target: config.yaml
+        details:
+          old_value: "secret_key: \"\""
+          new_value: "secret_key: super-secret-benchmark-key-do-not-use"
+
+  - mutation_type: missing_file
+    description: "Delete token_manager.py"
+    causal_path: >
+      auth.py imports create_token and verify_token from token_manager.py.
+      Without this file the application fails with ImportError at startup. The
+      agent must recreate the token management module before it can fix the
+      expiration check.
+    actions:
+      - action: delete_file
+        target: token_manager.py
+    rollback_actions:
+      - action: restore_file
+        target: token_manager.py
+
+  - mutation_type: api_contract_drift
+    description: "Change verify_token return type from dict to a raw string"
+    causal_path: >
+      auth.py and the tests expect verify_token to return a dict with user
+      claims. Changing it to return a JSON string instead breaks all callers
+      that access payload keys, requiring the agent to reconcile the contract
+      before the expiration fix can be tested.
+    actions:
+      - action: replace_string
+        target: token_manager.py
+        details:
+          old_value: "return payload"
+          new_value: "return json.dumps(payload)"
+      - action: add_import
+        target: token_manager.py
+        details:
+          import_line: "import json"
+    rollback_actions:
+      - action: replace_string
+        target: token_manager.py
+        details:
+          old_value: "return json.dumps(payload)"
+          new_value: "return payload"
+      - action: remove_import
+        target: token_manager.py
+        details:
+          import_line: "import json"

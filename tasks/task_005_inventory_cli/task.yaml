@@ -1,0 +1,11 @@
+name: task_005_inventory_cli
+description: "CLI inventory tool with broken search functionality"
+instruction: "The search function in inventory.py uses exact match (==) instead of case-insensitive substring matching as specified in the requirements. Fix the search function so that searching for 'wid' matches 'Widget', and searching for 'WIDGET' matches 'widget'."
+verify_command: "cd {task_dir} && bash verify.sh"
+valid_mutations:
+  - schema_drift
+  - dependency_drift
+  - config_corruption
+  - missing_file
+  - api_contract_drift
+timeout_seconds: 900
