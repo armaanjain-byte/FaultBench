@@ -1,105 +1,104 @@
-mutations:
-  - mutation_type: schema_drift
-    description: "Rename 'completed' column to 'is_done' in the Todo model and database schema"
-    causal_path: >
-      The app queries and updates the 'completed' column via SQLAlchemy ORM.
-      Renaming it to 'is_done' causes AttributeError on all read/write operations
-      involving the completed field, making the bug fix impossible without also
-      updating every reference to the old column name.
-    actions:
-      - action: rename_column
-        target: models.py
-        details:
-          table: todos
-          old_name: completed
-          new_name: is_done
-      - action: replace_string
-        target: app.py
-        details:
-          old_value: "todo.completed"
-          new_value: "todo.is_done"
-    rollback_actions:
-      - action: rename_column
-        target: models.py
-        details:
-          table: todos
-          old_name: is_done
-          new_name: completed
-      - action: replace_string
-        target: app.py
-        details:
-          old_value: "todo.is_done"
-          new_value: "todo.completed"
+schema_drift:
+  description: "Rename 'completed' column to 'is_done' in the Todo model and database schema"
+  causal_path: >
+    The app queries and updates the 'completed' column via SQLAlchemy ORM.
+    Renaming it to 'is_done' causes AttributeError on all read/write operations
+    involving the completed field, making the bug fix impossible without also
+    updating every reference to the old column name.
+  actions:
+    - action: rename_column
+      target: models.py
+      details:
+        table: todos
+        old_name: completed
+        new_name: is_done
+    - action: replace_string
+      target: app.py
+      details:
+        old_value: "todo.completed"
+        new_value: "todo.is_done"
+  rollback_actions:
+    - action: rename_column
+      target: models.py
+      details:
+        table: todos
+        old_name: is_done
+        new_name: completed
+    - action: replace_string
+      target: app.py
+      details:
+        old_value: "todo.is_done"
+        new_value: "todo.completed"
 
-  - mutation_type: dependency_drift
-    description: "Upgrade Flask requirement to a non-existent future version"
-    causal_path: >
-      The requirements.txt pins flask>=99.0.0 which does not exist. pip install
-      will fail, preventing the agent from setting up the environment and running
-      the app or its tests. The agent must fix or relax the version constraint
-      before it can reproduce and fix the persistence bug.
-    actions:
-      - action: replace_string
-        target: requirements.txt
-        details:
-          old_value: "flask>=3.0.0"
-          new_value: "flask>=99.0.0"
-    rollback_actions:
-      - action: replace_string
-        target: requirements.txt
-        details:
-          old_value: "flask>=99.0.0"
-          new_value: "flask>=3.0.0"
+dependency_drift:
+  description: "Upgrade Flask requirement to a non-existent future version"
+  causal_path: >
+    The requirements.txt pins flask>=99.0.0 which does not exist. pip install
+    will fail, preventing the agent from setting up the environment and running
+    the app or its tests. The agent must fix or relax the version constraint
+    before it can reproduce and fix the persistence bug.
+  actions:
+    - action: replace_string
+      target: requirements.txt
+      details:
+        old_value: "flask>=3.0.0"
+        new_value: "flask>=99.0.0"
+  rollback_actions:
+    - action: replace_string
+      target: requirements.txt
+      details:
+        old_value: "flask>=99.0.0"
+        new_value: "flask>=3.0.0"
 
-  - mutation_type: config_corruption
-    description: "Change the database URI to an invalid path with illegal characters"
-    causal_path: >
-      The config.yaml stores the SQLite database path used by database.py.
-      Corrupting it to an invalid URI means the app cannot open a database
-      connection, so the agent cannot run or test the application until the
-      config is repaired.
-    actions:
-      - action: replace_string
-        target: config.yaml
-        details:
-          old_value: "database_uri: sqlite:///todos.db"
-          new_value: "database_uri: sqlite:///:::invalid???path.db"
-    rollback_actions:
-      - action: replace_string
-        target: config.yaml
-        details:
-          old_value: "database_uri: sqlite:///:::invalid???path.db"
-          new_value: "database_uri: sqlite:///todos.db"
+config_corruption:
+  description: "Change the database URI to an invalid path with illegal characters"
+  causal_path: >
+    The config.yaml stores the SQLite database path used by database.py.
+    Corrupting it to an invalid URI means the app cannot open a database
+    connection, so the agent cannot run or test the application until the
+    config is repaired.
+  actions:
+    - action: replace_string
+      target: config.yaml
+      details:
+        old_value: "database_uri: sqlite:///todos.db"
+        new_value: "database_uri: sqlite:///:::invalid???path.db"
+  rollback_actions:
+    - action: replace_string
+      target: config.yaml
+      details:
+        old_value: "database_uri: sqlite:///:::invalid???path.db"
+        new_value: "database_uri: sqlite:///todos.db"
 
-  - mutation_type: missing_file
-    description: "Delete models.py which defines the Todo SQLAlchemy model"
-    causal_path: >
-      app.py imports the Todo model from models.py. Without this file the
-      application fails to start with ImportError. The agent must either
-      recreate models.py or inline the model before it can fix the commit bug.
-    actions:
-      - action: delete_file
-        target: models.py
-    rollback_actions:
-      - action: restore_file
-        target: models.py
+missing_file:
+  description: "Delete models.py which defines the Todo SQLAlchemy model"
+  causal_path: >
+    app.py imports the Todo model from models.py. Without this file the
+    application fails to start with ImportError. The agent must either
+    recreate models.py or inline the model before it can fix the commit bug.
+  actions:
+    - action: delete_file
+      target: models.py
+  rollback_actions:
+    - action: restore_file
+      target: models.py
 
-  - mutation_type: api_contract_drift
-    description: "Change the PUT endpoint path from /todos/<id> to /tasks/<id>"
-    causal_path: >
-      The tests and README reference PUT /todos/<id>. Renaming it to /tasks/<id>
-      breaks the test suite and any client code. The agent must discover the
-      route mismatch and reconcile the endpoint path before the persistence
-      fix can be verified by the test suite.
-    actions:
-      - action: replace_string
-        target: app.py
-        details:
-          old_value: "@app.route('/todos/<int:todo_id>', methods=['PUT'])"
-          new_value: "@app.route('/tasks/<int:todo_id>', methods=['PUT'])"
-    rollback_actions:
-      - action: replace_string
-        target: app.py
-        details:
-          old_value: "@app.route('/tasks/<int:todo_id>', methods=['PUT'])"
-          new_value: "@app.route('/todos/<int:todo_id>', methods=['PUT'])"
+api_contract_drift:
+  description: "Change the PUT endpoint path from /todos/<id> to /tasks/<id>"
+  causal_path: >
+    The tests and README reference PUT /todos/<id>. Renaming it to /tasks/<id>
+    breaks the test suite and any client code. The agent must discover the
+    route mismatch and reconcile the endpoint path before the persistence
+    fix can be verified by the test suite.
+  actions:
+    - action: replace_string
+      target: app.py
+      details:
+        old_value: "@app.route('/todos/<int:todo_id>', methods=['PUT'])"
+        new_value: "@app.route('/tasks/<int:todo_id>', methods=['PUT'])"
+  rollback_actions:
+    - action: replace_string
+      target: app.py
+      details:
+        old_value: "@app.route('/tasks/<int:todo_id>', methods=['PUT'])"
+        new_value: "@app.route('/todos/<int:todo_id>', methods=['PUT'])"

@@ -10,6 +10,7 @@ Supported actions
 * ``add_invalid_key`` — details: ``file``, ``key_path``, ``new_value``
 * ``add_key``         — alias/rollback helper identical to ``add_invalid_key``
 * ``set_value``       — rollback helper identical to ``change_value``
+* ``replace_string``  — details: ``old_value``, ``new_value``; target: filename
 """
 
 from __future__ import annotations
@@ -73,6 +74,7 @@ class ConfigCorruptionMutation(BaseMutation):
             "add_key": self._add_key,
             "set_value": self._change_value,
             "restore_file": self._restore_file,
+            "replace_string": self._replace_string,
         }
         handler = handlers.get(action.action)
         if handler is None:
@@ -226,6 +228,26 @@ class ConfigCorruptionMutation(BaseMutation):
 
         file_path.write_bytes(backup.read_bytes())
         backup.unlink()
+
+    # ------------------------------------------------------------------ #
+    # replace_string                                                      #
+    # ------------------------------------------------------------------ #
+
+    def _replace_string(self, task_dir: Path, action: MutationAction) -> None:
+        """Perform a literal string replacement in a file."""
+        details = action.details
+        file_path = task_dir / details.get("file", action.target)
+        old_value = details["old_value"]
+        new_value = details["new_value"]
+
+        log.info(
+            "replace_string",
+            file=str(file_path),
+            old_value=old_value,
+            new_value=new_value,
+        )
+
+        self.replace_string_in_file(file_path, old_value, new_value)
 
     # ------------------------------------------------------------------ #
     # Load / dump helpers                                                 #

@@ -5,6 +5,7 @@ Supported actions
 * ``change_version``           — details: ``package``, ``old_version``, ``new_version``
 * ``remove_package``           — details: ``package``
 * ``add_conflicting_package``  — details: ``conflicting_package``, ``new_version``
+* ``replace_string``           — details: ``old_value``, ``new_value``; target: filename
 """
 
 from __future__ import annotations
@@ -83,6 +84,7 @@ class DependencyDriftMutation(BaseMutation):
             "remove_package": self._remove_package,
             "add_conflicting_package": self._add_conflicting_package,
             "add_package": self._add_package,
+            "replace_string": self._replace_string,
         }
         handler = handlers.get(action.action)
         if handler is None:
@@ -214,6 +216,26 @@ class DependencyDriftMutation(BaseMutation):
             content += f"\n{new_line}\n"
 
         file_path.write_text(content, encoding="utf-8")
+
+    # ------------------------------------------------------------------ #
+    # replace_string                                                      #
+    # ------------------------------------------------------------------ #
+
+    def _replace_string(self, task_dir: Path, action: MutationAction) -> None:
+        """Perform a literal string replacement in a file."""
+        details = action.details
+        file_path = task_dir / details.get("file", action.target)
+        old_value = details["old_value"]
+        new_value = details["new_value"]
+
+        log.info(
+            "replace_string",
+            file=str(file_path),
+            old_value=old_value,
+            new_value=new_value,
+        )
+
+        self.replace_string_in_file(file_path, old_value, new_value)
 
     # ------------------------------------------------------------------ #
     # Helpers                                                             #

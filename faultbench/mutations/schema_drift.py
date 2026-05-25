@@ -6,9 +6,10 @@ spec's ``actions`` list is dispatched to a handler by the ``action`` field.
 
 Supported actions
 -----------------
-* ``rename_column``  — details: ``file``, ``table``, ``old_name``, ``new_name``
-* ``rename_table``   — details: ``file``, ``old_name``, ``new_name``
+* ``rename_column``      — details: ``file``, ``table``, ``old_name``, ``new_name``
+* ``rename_table``       — details: ``file``, ``old_name``, ``new_name``
 * ``change_column_type`` — details: ``file``, ``table``, ``column``, ``new_type``
+* ``replace_string``     — details: ``old_value``, ``new_value``; target: filename
 """
 
 from __future__ import annotations
@@ -70,6 +71,7 @@ class SchemaDriftMutation(BaseMutation):
             "rename_column": self._rename_column,
             "rename_table": self._rename_table,
             "change_column_type": self._change_column_type,
+            "replace_string": self._replace_string,
         }
         handler = handlers.get(action.action)
         if handler is None:
@@ -247,6 +249,26 @@ class SchemaDriftMutation(BaseMutation):
             raise
         finally:
             conn.close()
+
+    # ------------------------------------------------------------------ #
+    # replace_string                                                      #
+    # ------------------------------------------------------------------ #
+
+    def _replace_string(self, task_dir: Path, action: MutationAction) -> None:
+        """Perform a literal string replacement in a file."""
+        details = action.details
+        file_path = task_dir / details.get("file", action.target)
+        old_value = details["old_value"]
+        new_value = details["new_value"]
+
+        log.info(
+            "replace_string",
+            file=str(file_path),
+            old_value=old_value,
+            new_value=new_value,
+        )
+
+        self.replace_string_in_file(file_path, old_value, new_value)
 
     # ------------------------------------------------------------------ #
     # File-level helpers                                                  #

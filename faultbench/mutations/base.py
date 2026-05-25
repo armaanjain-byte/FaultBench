@@ -120,3 +120,31 @@ class BaseMutation(abc.ABC):
         except Exception:
             bound.exception("mutation_validate_failed")
             raise
+
+    # ------------------------------------------------------------------ #
+    # Shared file-level helpers                                           #
+    # ------------------------------------------------------------------ #
+
+    @staticmethod
+    def replace_string_in_file(
+        file_path: Path,
+        old_value: str,
+        new_value: str,
+    ) -> None:
+        """Replace exact literal text in a UTF-8 file.
+
+        Performs a plain string replacement (not regex). Overwrites the file
+        in-place.
+
+        Raises:
+            ValueError: If *old_value* is not found in the file.  The error
+                message includes the filename and the missing string so that
+                callers can produce actionable diagnostics.
+        """
+        content = file_path.read_text(encoding="utf-8")
+        if old_value not in content:
+            raise ValueError(
+                f"String not found in {file_path}: {old_value!r}"
+            )
+        updated = content.replace(old_value, new_value)
+        file_path.write_text(updated, encoding="utf-8")

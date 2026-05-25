@@ -9,6 +9,9 @@ Supported actions
   ``pattern``, ``replacement``
 * ``change_endpoint``       — details: ``file``, ``old_path``, ``new_path``
 * ``change_status_code``    — details: ``file``, ``pattern``, ``replacement``
+* ``replace_string``        — details: ``old_value``, ``new_value``; target: filename
+* ``add_import``            — details: ``import_line``; target: filename
+* ``remove_import``         — details: ``import_line``; target: filename
 """
 
 from __future__ import annotations
@@ -99,6 +102,9 @@ class ApiContractDriftMutation(BaseMutation):
             "change_response_field": self._change_response_field,
             "change_endpoint": self._change_endpoint,
             "change_status_code": self._change_status_code,
+            "replace_string": self._replace_string,
+            "add_import": self._add_import,
+            "remove_import": self._remove_import,
         }
         handler = handlers.get(action.action)
         if handler is None:
@@ -219,3 +225,51 @@ class ApiContractDriftMutation(BaseMutation):
             )
 
         file_path.write_text(updated, encoding="utf-8")
+
+    # ------------------------------------------------------------------ #
+    # replace_string                                                      #
+    # ------------------------------------------------------------------ #
+
+    def _replace_string(self, task_dir: Path, action: MutationAction) -> None:
+        """Perform a literal string replacement in a file."""
+        details = action.details
+        file_path = task_dir / details.get("file", action.target)
+        old_value = details["old_value"]
+        new_value = details["new_value"]
+
+        log.info(
+            "replace_string",
+            file=str(file_path),
+            old_value=old_value,
+            new_value=new_value,
+        )
+
+        self.replace_string_in_file(file_path, old_value, new_value)
+
+    # ------------------------------------------------------------------ #
+    # add_import / remove_import                                          #
+    # ------------------------------------------------------------------ #
+
+    def _add_import(self, task_dir: Path, action: MutationAction) -> None:
+        """Prepend an import line to a Python source file."""
+        details = action.details
+        file_path = task_dir / details.get("file", action.target)
+        import_line = details["import_line"]
+
+        log.info("add_import", file=str(file_path), import_line=import_line)
+
+        content = file_path.read_text(encoding="utf-8")
+        if import_line not in content:
+            file_path.write_text(import_line + "\n" + content, encoding="utf-8")
+
+    def _remove_import(self, task_dir: Path, action: MutationAction) -> None:
+        """Remove a specific import line from a Python source file."""
+        details = action.details
+        file_path = task_dir / details.get("file", action.target)
+        import_line = details["import_line"]
+
+        log.info("remove_import", file=str(file_path), import_line=import_line)
+
+        lines = file_path.read_text(encoding="utf-8").splitlines(keepends=True)
+        updated = [line for line in lines if line.rstrip("\r\n") != import_line]
+        file_path.write_text("".join(updated), encoding="utf-8")
