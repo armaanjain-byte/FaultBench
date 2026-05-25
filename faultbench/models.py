@@ -125,9 +125,11 @@ class AgentConfig:
     """Configuration for the coding agent."""
 
     default: str = "openhands"
+    base_url: str = "http://localhost:3000"
     model: str = "claude-sonnet-4-20250514"
     max_iterations: int = 30
     poll_interval_seconds: float = 5.0
+    start_task_timeout_seconds: float = 120.0
 
 
 @dataclasses.dataclass

@@ -51,8 +51,10 @@ def _create_agent(config: BenchmarkConfig) -> BaseAgent:
 
     if agent_name == AgentName.OPENHANDS.value:
         return OpenHandsClient(
+            base_url=config.agent.base_url,
             model=config.agent.model,
             poll_interval=config.agent.poll_interval_seconds,
+            start_task_timeout=config.agent.start_task_timeout_seconds,
         )
 
     raise OrchestratorError(

@@ -1,0 +1,36 @@
+# mutations.yaml — Hello World Task
+#
+# This task has no real mutations (it is a baseline-only benchmark).
+# This file is required by the registry loader but all entries are no-ops.
+# Placeholder entries are provided so the mutation loader does not error
+# if someone accidentally passes a mutation flag for this task.
+
+schema_drift:
+  description: "No-op placeholder (hello_world has no schema)"
+  causal_path: "N/A"
+  actions: []
+  rollback_actions: []
+
+dependency_drift:
+  description: "No-op placeholder (hello_world has no dependencies)"
+  causal_path: "N/A"
+  actions: []
+  rollback_actions: []
+
+config_corruption:
+  description: "No-op placeholder (hello_world has no config)"
+  causal_path: "N/A"
+  actions: []
+  rollback_actions: []
+
+missing_file:
+  description: "No-op placeholder (hello_world has only hello.py)"
+  causal_path: "N/A"
+  actions: []
+  rollback_actions: []
+
+api_contract_drift:
+  description: "No-op placeholder (hello_world has no API)"
+  causal_path: "N/A"
+  actions: []
+  rollback_actions: []

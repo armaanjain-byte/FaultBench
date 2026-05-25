@@ -53,6 +53,7 @@ def _apply_env_overrides(raw: dict[str, Any]) -> dict[str, Any]:
         FAULTBENCH_MAX_RUNTIME    → sandbox.max_runtime_seconds
     """
     overrides: list[tuple[str, tuple[str, ...], type]] = [
+        ("FAULTBENCH_OPENHANDS_BASE_URL", ("agent", "base_url"), str),
         ("FAULTBENCH_MODEL", ("agent", "model"), str),
         ("FAULTBENCH_MAX_ITERATIONS", ("agent", "max_iterations"), int),
         ("FAULTBENCH_DB_PATH", ("paths", "db"), str),
@@ -81,9 +82,13 @@ def _build_agent_config(raw: dict[str, Any]) -> AgentConfig:
         section = {}
     return AgentConfig(
         default=section.get("default", "openhands"),
+        base_url=section.get("base_url", "http://localhost:3000"),
         model=section.get("model", "claude-sonnet-4-20250514"),
         max_iterations=int(section.get("max_iterations", 30)),
         poll_interval_seconds=float(section.get("poll_interval_seconds", 5.0)),
+        start_task_timeout_seconds=float(
+            section.get("start_task_timeout_seconds", 120.0)
+        ),
     )
 
 

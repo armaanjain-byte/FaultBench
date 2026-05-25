@@ -1,0 +1,34 @@
+# Hello World — FaultBench Minimal Benchmark Task
+#
+# This is the simplest possible benchmark: a Python script with a typo that
+# must be corrected.  It serves as the foundational smoke test for the
+# full FaultBench → OpenHands execution pipeline.
+
+name: task_hello_world
+description: >
+  A minimal Python script contains a typo in its print statement.
+  The agent must detect and fix the typo so that the script
+  outputs exactly "hello world" when run with Python.
+
+instruction: >
+  The file hello.py in the current directory contains a bug.
+  When run with `python hello.py`, it outputs "helo wrld" instead
+  of "hello world".
+
+  Fix the typo in hello.py so that running `python hello.py`
+  prints exactly: hello world
+
+  Do not create any additional files. Only fix the typo in hello.py.
+
+# Verification: run verify.py which checks both exit code and exact output
+verify_command: "python verify.py"
+
+# Expected stdout (matched by the verification step via exit code)
+# python hello.py must exit 0 AND output "hello world"
+verify_expected_output: "hello world"
+
+# This task has no mutations — it is a baseline-only evaluation
+valid_mutations: []
+
+# Generous timeout: the agent just needs to edit one file
+timeout_seconds: 300

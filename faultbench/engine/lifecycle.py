@@ -17,6 +17,7 @@ This module is called by the orchestrator for each individual run.
 
 from __future__ import annotations
 
+import subprocess
 import time
 from pathlib import Path
 from typing import Optional
@@ -96,7 +97,46 @@ def execute_single_run(
 
         elapsed = time.time() - start_time
 
-        # Step 4: Save raw logs
+        # Step 4: Verify task completion independently of agent self-report
+        verification_result = _verify_task(
+            task_config=task_config,
+            work_dir=work_dir,
+        )
+
+        # Ground-truth success: agent must report success AND verification passes.
+        # If verification is not configured, fall back to agent self-report.
+        if verification_result is not None:
+            verified_success = verification_result.success
+            if agent_result.success and not verified_success:
+                log.warning(
+                    "lifecycle_verification_failed_despite_agent_success",
+                    task=task_config.name,
+                    verify_command=task_config.verify_command,
+                    verify_output=verification_result.raw_output[:500],
+                )
+            agent_result = AgentResult(
+                success=verified_success,
+                iterations_used=agent_result.iterations_used,
+                tokens_used=agent_result.tokens_used,
+                raw_output=(
+                    agent_result.raw_output
+                    + "\n\n--- VERIFICATION ---\n"
+                    + verification_result.raw_output
+                ),
+                error_message=(
+                    agent_result.error_message
+                    if verified_success
+                    else (
+                        verification_result.raw_output[:500]
+                        or agent_result.error_message
+                    )
+                ),
+                execution_trace=agent_result.execution_trace,
+            )
+
+        elapsed = time.time() - start_time
+
+        # Step 5: Save raw logs
         raw_log_path = save_raw_log(
             log_content=agent_result.raw_output,
             log_dir=log_dir,
@@ -104,7 +144,7 @@ def execute_single_run(
             run_id=f"run_{run_index}_{int(start_time)}",
         )
 
-        # Step 5: Build RunRecord
+        # Step 6: Build RunRecord
         record = collect_run_record(
             task_name=task_config.name,
             agent_name=agent.agent_name,
@@ -265,6 +305,104 @@ def _execute_agent(
             iterations_used=0,
             tokens_used=None,
             raw_output=f"Agent execution error: {exc}",
+            error_message=str(exc),
+        )
+
+
+def _verify_task(
+    *,
+    task_config: TaskConfig,
+    work_dir: Optional[Path],
+) -> Optional[AgentResult]:
+    """Run the task's verify_command and return an AgentResult-like outcome.
+
+    This provides ground-truth success signal independent of the agent's
+    self-reported result.  The command is executed on the HOST inside
+    ``work_dir`` (the mutated working copy after the agent has run).
+
+    Args:
+        task_config: Task configuration containing ``verify_command``.
+        work_dir: The working directory after agent execution.
+
+    Returns:
+        An AgentResult with ``success=True`` if exit code is 0, or
+        ``success=False`` otherwise.  Returns ``None`` if there is no
+        verify_command or work_dir is unavailable.
+    """
+    verify_cmd = task_config.verify_command.strip()
+    if not verify_cmd or not work_dir or not work_dir.exists():
+        log.debug(
+            "lifecycle_verify_skip",
+            task=task_config.name,
+            reason="no_command_or_workdir",
+        )
+        return None
+
+    log.info(
+        "lifecycle_verifying",
+        task=task_config.name,
+        command=verify_cmd,
+        work_dir=str(work_dir),
+    )
+
+    try:
+        proc = subprocess.run(
+            verify_cmd,
+            shell=True,
+            capture_output=True,
+            text=True,
+            cwd=str(work_dir),
+            timeout=60,
+        )
+
+        output = (proc.stdout + proc.stderr).strip()
+        success = proc.returncode == 0
+
+        log.info(
+            "lifecycle_verify_complete",
+            task=task_config.name,
+            success=success,
+            exit_code=proc.returncode,
+            output_preview=output[:200],
+        )
+
+        return AgentResult(
+            success=success,
+            iterations_used=0,
+            tokens_used=None,
+            raw_output=(
+                f"verify_command: {verify_cmd}\n"
+                f"exit_code: {proc.returncode}\n"
+                f"stdout:\n{proc.stdout}\n"
+                f"stderr:\n{proc.stderr}"
+            ),
+            error_message=(
+                None
+                if success
+                else f"Verification failed (exit={proc.returncode}): {output[:300]}"
+            ),
+        )
+
+    except subprocess.TimeoutExpired:
+        log.warning("lifecycle_verify_timeout", task=task_config.name)
+        return AgentResult(
+            success=False,
+            iterations_used=0,
+            tokens_used=None,
+            raw_output=f"Verification timed out after 60s: {verify_cmd}",
+            error_message="Verification timed out",
+        )
+    except Exception as exc:
+        log.error(
+            "lifecycle_verify_error",
+            task=task_config.name,
+            error=str(exc),
+        )
+        return AgentResult(
+            success=False,
+            iterations_used=0,
+            tokens_used=None,
+            raw_output=f"Verification error: {exc}",
             error_message=str(exc),
         )
 

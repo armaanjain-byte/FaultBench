@@ -4,9 +4,14 @@
 
 agent:
   default: openhands
+  # Base URL of the running OpenHands server.
+  # Override with env: OPENHANDS_BASE_URL
+  base_url: "http://localhost:3000"
   model: claude-sonnet-4-20250514
   max_iterations: 30
   poll_interval_seconds: 5.0
+  # How long (seconds) to wait for the OpenHands sandbox to initialize
+  start_task_timeout_seconds: 120
 
 sandbox:
   image: faultbench-sandbox:latest
