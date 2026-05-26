@@ -30,6 +30,10 @@ from faultbench.models import BenchmarkConfig, MutationSpec, RunRecord, TaskConf
 from faultbench.mutations.registry import get_mutation, get_mutation_spec
 from faultbench.sandbox.file_ops import cleanup_workdir, copy_task_to_workdir, ensure_directory
 
+# Name of the sentinel file written into work_dir before agent execution.
+# If OpenHands deletes or modifies this file, we know it can see the workdir.
+_WORKSPACE_SENTINEL = ".faultbench_sentinel"
+
 log = get_logger(__name__)
 
 
@@ -86,6 +90,18 @@ def execute_single_run(
             mutation_spec = _load_and_apply_mutation(work_dir, mutation_type)
             mutation_applied = True
 
+        # Step 2b: Write workspace sentinel for access validation.
+        # OpenHands must be able to see/modify this file for the benchmark
+        # to have any scientific validity.  We check it after execution.
+        sentinel_path = work_dir / _WORKSPACE_SENTINEL
+        sentinel_content = f"faultbench_sentinel task={task_config.name} mutation={mutation_label}\n"
+        sentinel_path.write_text(sentinel_content, encoding="utf-8")
+        log.info(
+            "lifecycle_sentinel_written",
+            path=str(sentinel_path),
+            work_dir=str(work_dir),
+        )
+
         # Step 3: Execute the agent
         agent_result = _execute_agent(
             agent=agent,
@@ -96,6 +112,15 @@ def execute_single_run(
         )
 
         elapsed = time.time() - start_time
+
+        # Step 3b: Validate that OpenHands actually operated on work_dir.
+        _validate_workspace_access(
+            work_dir=work_dir,
+            sentinel_path=sentinel_path,
+            sentinel_content=sentinel_content,
+            task_name=task_config.name,
+            mutation_label=mutation_label,
+        )
 
         # Step 4: Verify task completion independently of agent self-report
         verification_result = _verify_task(
@@ -196,9 +221,29 @@ def execute_single_run(
         if mutation_applied and work_dir and mutation_spec:
             _rollback_mutation(work_dir, mutation_type, mutation_spec)
 
-        # Step 7: Cleanup
+        # Step 7: Cleanup — keep the workdir if the run failed so the
+        # operator can inspect exactly what state the agent left it in.
+        # This is critical for diagnosing verification failures and
+        # workspace access problems.
         if work_dir:
-            cleanup_workdir(work_dir)
+            # Determine if this run was a success by checking agent_result
+            # Note: agent_result may not be bound if an early exception fired,
+            # so we default to keeping the dir on any uncertainty.
+            try:
+                run_succeeded = agent_result.success  # type: ignore[possibly-undefined]
+            except (NameError, AttributeError):
+                run_succeeded = False
+
+            if run_succeeded:
+                cleanup_workdir(work_dir)
+            else:
+                log.warning(
+                    "lifecycle_workdir_kept_for_inspection",
+                    work_dir=str(work_dir),
+                    task=task_config.name,
+                    mutation=mutation_label,
+                    reason="run_failed_or_verification_failed",
+                )
 
 
 def _load_and_apply_mutation(
@@ -306,6 +351,89 @@ def _execute_agent(
             tokens_used=None,
             raw_output=f"Agent execution error: {exc}",
             error_message=str(exc),
+        )
+
+
+def _validate_workspace_access(
+    *,
+    work_dir: Path,
+    sentinel_path: Path,
+    sentinel_content: str,
+    task_name: str,
+    mutation_label: str,
+) -> None:
+    """Check whether the agent actually operated on the correct work_dir.
+
+    Writes a sentinel file before agent execution, then inspects afterward:
+    - If the sentinel was deleted: agent definitely saw the workdir (good)
+    - If the sentinel was modified: agent interacted with the workdir (good)
+    - If no .py files were touched: agent may not have seen the workdir (bad)
+
+    This check is diagnostic-only — it does NOT abort the run.  The result
+    is logged as ``workspace_validated`` so it is visible in every run log.
+
+    Args:
+        work_dir: The working directory that was passed to the agent.
+        sentinel_path: Path to the sentinel file that was written.
+        sentinel_content: Original content of the sentinel file.
+        task_name: Task name (for logging).
+        mutation_label: Mutation label (for logging).
+    """
+    if not work_dir.exists():
+        log.warning(
+            "lifecycle_workspace_validation_skipped",
+            reason="workdir_missing",
+            task=task_name,
+        )
+        return
+
+    # Check sentinel state
+    sentinel_deleted = not sentinel_path.exists()
+    sentinel_modified = False
+    if sentinel_path.exists():
+        try:
+            current = sentinel_path.read_text(encoding="utf-8")
+            sentinel_modified = current != sentinel_content
+        except OSError:
+            sentinel_modified = True
+
+    # Count modified Python files (mtime newer than sentinel write)
+    # This is a heuristic: if the agent fixed a bug, it changed .py files.
+    sentinel_mtime = sentinel_path.stat().st_mtime if sentinel_path.exists() else 0.0
+    try:
+        modified_files = [
+            str(p.relative_to(work_dir))
+            for p in work_dir.rglob("*.py")
+            if p.is_file() and p.stat().st_mtime > sentinel_mtime
+        ]
+    except OSError:
+        modified_files = []
+
+    workspace_validated = sentinel_deleted or sentinel_modified or bool(modified_files)
+
+    log.info(
+        "lifecycle_workspace_validation",
+        task=task_name,
+        mutation=mutation_label,
+        workspace_validated=workspace_validated,
+        sentinel_deleted=sentinel_deleted,
+        sentinel_modified=sentinel_modified,
+        modified_py_files=len(modified_files),
+        modified_files_sample=modified_files[:5],
+        work_dir=str(work_dir),
+    )
+
+    if not workspace_validated:
+        log.warning(
+            "lifecycle_workspace_not_validated",
+            task=task_name,
+            mutation=mutation_label,
+            work_dir=str(work_dir),
+            message=(
+                "CRITICAL: No file changes detected in work_dir after agent execution. "
+                "OpenHands may NOT be operating on this workspace. "
+                "Benchmark results may be scientifically invalid."
+            ),
         )
 
 

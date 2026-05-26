@@ -9,6 +9,7 @@ schema_drift:
     - action: rename_column
       target: models.py
       details:
+        file: models.py
         table: todos
         old_name: completed
         new_name: is_done
@@ -21,6 +22,7 @@ schema_drift:
     - action: rename_column
       target: models.py
       details:
+        file: models.py
         table: todos
         old_name: is_done
         new_name: completed

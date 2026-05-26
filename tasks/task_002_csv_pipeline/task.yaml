@@ -1,7 +1,7 @@
 name: task_002_csv_pipeline
 description: "CSV-to-JSON data pipeline with broken running-total transformation"
 instruction: "The pipeline's calculate_running_totals function in transformers.py has an off-by-one error in its accumulator — it skips the first row's value when computing cumulative sums. Fix the running total calculation so that every row (including the first) is included in the cumulative sum."
-verify_command: "cd {task_dir} && bash verify.sh"
+verify_command: "bash verify.sh"
 valid_mutations:
   - schema_drift
   - dependency_drift

@@ -112,12 +112,20 @@ def load_task_configs(tasks_dir: Path) -> list[TaskConfig]:
                         mutation=m_str,
                     )
 
+            raw_verify_command = raw.get("verify_command", "bash verify.sh")
+            # Substitute {task_dir} placeholder if present (legacy support)
+            # The cwd is set to work_dir at runtime, so this path is only
+            # needed for commands that explicitly reference the original dir.
+            verify_command = raw_verify_command.replace(
+                "{task_dir}", str(task_dir.resolve())
+            )
+
             task_config = TaskConfig(
                 name=raw.get("name", task_dir.name),
                 description=raw.get("description", ""),
                 instruction=raw.get("instruction", ""),
                 repo_path=str(task_dir.resolve()),
-                verify_command=raw.get("verify_command", f"cd {task_dir} && bash verify.sh"),
+                verify_command=verify_command,
                 valid_mutations=valid_mutations,
                 timeout_seconds=int(raw.get("timeout_seconds", 900)),
             )

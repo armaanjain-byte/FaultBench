@@ -1,7 +1,7 @@
 name: task_001_todo_api
 description: "Flask TODO API with SQLite persistence bug"
 instruction: "The PUT /todos/<id> endpoint updates todo items but changes are not persisted to the database. Fix the persistence bug so that updating a todo's completed status is saved."
-verify_command: "cd {task_dir} && bash verify.sh"
+verify_command: "bash verify.sh"
 valid_mutations:
   - schema_drift
   - dependency_drift

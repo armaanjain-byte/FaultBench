@@ -26,5 +26,7 @@ paths:
   tasks: tasks/
 
 benchmark:
-  min_runs_for_comparison: 5   # refuse to compare with fewer runs
-  default_runs: 10
+  # NOTE: Set to 1 for single-slice smoke testing.
+  # Raise to >= 5 before collecting real benchmark data.
+  min_runs_for_comparison: 1
+  default_runs: 1
