@@ -1,0 +1,11 @@
+# Ignore generated frontend/build files from language stats
+dist/* linguist-generated=true
+build/* linguist-generated=true
+.next/* linguist-generated=true
+
+# Ignore static assets
+*.css linguist-generated=true
+*.html linguist-generated=true
+
+# Optional
+node_modules/* linguist-vendored
