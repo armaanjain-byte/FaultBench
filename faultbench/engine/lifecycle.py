@@ -75,10 +75,7 @@ def execute_single_run(
     task_dir = Path(task_config.repo_path)
     log_dir = Path(config.paths.logs)
     
-    # MINIMUM DETERMINISTIC FIX:
-    # OpenHands only mounts C:\random\Desktop\OpenHands\workspace to /opt/workspace_base
-    # We must copy tasks here so OpenHands can see them.
-    work_parent = ensure_directory(Path(r"C:\random\Desktop\OpenHands\workspace\workdirs"))
+    work_parent = ensure_directory(Path("logs/workdirs"))
 
     work_dir: Optional[Path] = None
     mutation_spec: Optional[MutationSpec] = None

@@ -169,7 +169,7 @@ class OpenHandsClient(BaseAgent):
             )
 
             # ── Step 2: Poll start-task until sandbox is READY ───────────────
-            ready_conversation_id = self._poll_start_task(
+            ready_conversation_id, sandbox_id = self._poll_start_task(
                 start_task_id=start_task_id,
                 timeout_seconds=self._start_task_timeout,
                 start_time=time.time(),  # separate clock for sandbox init
@@ -185,12 +185,42 @@ class OpenHandsClient(BaseAgent):
                     "returned no conversation_id"
                 )
 
+            # ── Step 2.5: Inject benchmark files and trigger execution ───────
+            import subprocess
+            abs_workspace = os.path.abspath(workspace_dir)
+            # Windows host -> Linux container mapping via docker cp
+            cmd = ["docker", "cp", f"{abs_workspace}/.", f"{sandbox_id}:/workspace/project/"]
+            log.info("openhands_injecting_workspace", command=" ".join(cmd))
+            proc = subprocess.run(cmd, capture_output=True, text=True)
+            if proc.returncode != 0:
+                raise AgentExecutionError(f"Failed to inject workspace into sandbox: {proc.stderr}")
+
+            # Send the initial task instruction to trigger agent execution
+            msg_payload = {
+                "role": "user",
+                "content": [{"type": "text", "text": instruction}],
+                "run": True
+            }
+            resp = httpx.post(
+                f"{self._base_url}/api/v1/app-conversations/{conversation_id}/send-message",
+                json=msg_payload,
+                timeout=30.0,
+            )
+            resp.raise_for_status()
+
             # ── Step 3: Poll execution until terminal state ──────────────────
             final_exec_status = self._poll_execution(
                 conversation_id=conversation_id,
                 timeout_seconds=timeout_seconds,
                 global_start=start_time,
             )
+
+            # ── Step 3.5: Extract modified workspace ─────────────────────────
+            extract_cmd = ["docker", "cp", f"{sandbox_id}:/workspace/project/.", f"{abs_workspace}/"]
+            log.info("openhands_extracting_workspace", command=" ".join(extract_cmd))
+            proc_ext = subprocess.run(extract_cmd, capture_output=True, text=True)
+            if proc_ext.returncode != 0:
+                log.warning(f"Failed to extract workspace from sandbox: {proc_ext.stderr}")
 
             elapsed = time.time() - start_time
 
@@ -267,36 +297,9 @@ class OpenHandsClient(BaseAgent):
             f"Maximum iterations: {max_iterations}."
         )
 
-        import os
-        abs_workspace_dir = os.path.abspath(workspace_dir)
-        
-        # Path translation: Host -> Container
-        host_base = r"C:\random\Desktop\OpenHands\workspace"
-        container_base = "/opt/workspace_base"
-        
-        if abs_workspace_dir.startswith(host_base):
-            rel = os.path.relpath(abs_workspace_dir, host_base)
-            container_path = container_base + "/" + rel.replace(os.sep, "/")
-        else:
-            container_path = abs_workspace_dir
-            
-        log.info(
-            "openhands_path_resolution",
-            passed_workspace_dir=workspace_dir,
-            resolved_absolute_path=abs_workspace_dir,
-            sandbox_mount_path=container_path,
-            final_execution_directory=container_path,
-        )
-
         payload: dict[str, Any] = {
-            "initial_message": {
-                "role": "user",
-                "content": [{"type": "text", "text": instruction}],
-                "run": True,
-            },
             "system_message_suffix": system_suffix,
             "llm_model": self._model,
-            "selected_repository": container_path,
         }
 
         try:
@@ -338,11 +341,11 @@ class OpenHandsClient(BaseAgent):
         start_task_id: str,
         timeout_seconds: float,
         start_time: float,
-    ) -> str:
+    ) -> tuple[str, str]:
         """Poll start-task until READY or ERROR.
 
         Returns:
-            The ``app_conversation_id`` once READY.
+            Tuple of (app_conversation_id, sandbox_id) once READY.
 
         Raises:
             AgentExecutionError: If start-task errors or times out.
@@ -378,12 +381,14 @@ class OpenHandsClient(BaseAgent):
                         )
 
                         if status == "READY":
+                            sandbox_id = task.get("sandbox_id", "")
                             log.info(
                                 "openhands_start_task_ready",
                                 start_task_id=start_task_id,
                                 conversation_id=conv_id,
+                                sandbox_id=sandbox_id,
                             )
-                            return conv_id
+                            return conv_id, sandbox_id
 
                         if status == "ERROR":
                             detail = task.get("detail", "unknown error")
@@ -432,6 +437,7 @@ class OpenHandsClient(BaseAgent):
         # Track event cursor to avoid reprocessing
         last_event_id: Optional[str] = None
         current_status = "running"
+        has_seen_running = False
 
         while True:
             elapsed = time.time() - global_start
@@ -456,10 +462,8 @@ class OpenHandsClient(BaseAgent):
             try:
                 params: dict[str, Any] = {
                     "kind__eq": "ConversationStateUpdateEvent",
-                    "limit": 50,
+                    "limit": 100,
                 }
-                if last_event_id:
-                    params["page_id"] = last_event_id
 
                 response = httpx.get(
                     f"{self._base_url}/api/v1/conversation/{conversation_id}/events/search",
@@ -496,14 +500,21 @@ class OpenHandsClient(BaseAgent):
                                     elapsed=round(elapsed, 1),
                                 )
 
+                    if current_status == "running":
+                        has_seen_running = True
+
+                    # Only accept 'idle' as terminal if we have seen it run first
                     if current_status in _EXEC_TERMINAL:
-                        log.info(
-                            "openhands_execution_terminal",
-                            conversation_id=conversation_id,
-                            final_status=current_status,
-                            elapsed=round(elapsed, 1),
-                        )
-                        return current_status
+                        if current_status == "idle" and not has_seen_running:
+                            pass # Still waiting for the agent to wake up from its initial idle state
+                        else:
+                            log.info(
+                                "openhands_execution_terminal",
+                                conversation_id=conversation_id,
+                                final_status=current_status,
+                                elapsed=round(elapsed, 1),
+                            )
+                            return current_status
 
                 elif response.status_code == 404:
                     log.warning(
@@ -556,9 +567,9 @@ class OpenHandsClient(BaseAgent):
                 timeout=15.0,
             )
             if resp.status_code == 200 and "application/json" in resp.headers.get("content-type", ""):
-                items = resp.json().get("items", [])
-                if items:
-                    conv = items[0]
+                data = resp.json()
+                if isinstance(data, list) and data:
+                    conv = data[0]
                     metrics = conv.get("metrics") or {}
                     tokens_used = metrics.get("accumulated_token_usage", {}).get(
                         "total_tokens"
@@ -598,7 +609,7 @@ class OpenHandsClient(BaseAgent):
         try:
             response = httpx.get(
                 f"{self._base_url}/api/v1/conversation/{conversation_id}/events/search",
-                params={"limit": 200},
+                params={"limit": 100},
                 timeout=30.0,
             )
             if response.status_code == 200:

@@ -7,13 +7,21 @@ that touch the host filesystem before Docker execution happen here.
 
 from __future__ import annotations
 
+import os
 import shutil
+import stat
 from pathlib import Path
 from typing import Optional
 
 from faultbench.logging import get_logger
 
 log = get_logger(__name__)
+
+
+def remove_readonly(func, path, _):
+    """Clear the readonly bit and reattempt the removal."""
+    os.chmod(path, stat.S_IWRITE)
+    func(path)
 
 
 def copy_task_to_workdir(task_dir: Path, work_dir: Path) -> Path:
@@ -41,7 +49,7 @@ def copy_task_to_workdir(task_dir: Path, work_dir: Path) -> Path:
 
     if dest.exists():
         log.warning("workdir_exists_removing", path=str(dest))
-        shutil.rmtree(dest)
+        shutil.rmtree(dest, onerror=remove_readonly)
 
     log.info("copy_task_start", src=str(task_dir), dest=str(dest))
     shutil.copytree(task_dir, dest)
@@ -76,7 +84,7 @@ def create_backup(target_path: Path, backup_suffix: str = ".bak") -> Path:
 
     if target_path.is_dir():
         if backup_path.exists():
-            shutil.rmtree(backup_path)
+            shutil.rmtree(backup_path, onerror=remove_readonly)
         shutil.copytree(target_path, backup_path)
     else:
         shutil.copy2(target_path, backup_path)
@@ -100,7 +108,7 @@ def restore_from_backup(backup_path: Path, target_path: Path) -> None:
 
     if target_path.exists():
         if target_path.is_dir():
-            shutil.rmtree(target_path)
+            shutil.rmtree(target_path, onerror=remove_readonly)
         else:
             target_path.unlink()
 
@@ -120,7 +128,7 @@ def cleanup_workdir(work_dir: Path) -> None:
     """
     if work_dir.exists():
         log.info("cleanup_workdir", path=str(work_dir))
-        shutil.rmtree(work_dir)
+        shutil.rmtree(work_dir, onerror=remove_readonly)
     else:
         log.debug("cleanup_workdir_skip", path=str(work_dir), reason="not_found")
 
