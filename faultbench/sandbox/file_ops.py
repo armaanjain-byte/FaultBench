@@ -47,6 +47,12 @@ def copy_task_to_workdir(task_dir: Path, work_dir: Path) -> Path:
     shutil.copytree(task_dir, dest)
     log.info("copy_task_complete", dest=str(dest))
 
+    # Initialize a dummy git repo so OpenHands can load it as selected_repository
+    import subprocess
+    subprocess.run(['git', 'init'], cwd=str(dest), capture_output=True)
+    subprocess.run(['git', 'add', '.'], cwd=str(dest), capture_output=True)
+    subprocess.run(['git', 'commit', '-m', 'Init'], cwd=str(dest), capture_output=True)
+
     return dest
 
 

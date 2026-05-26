@@ -267,6 +267,27 @@ class OpenHandsClient(BaseAgent):
             f"Maximum iterations: {max_iterations}."
         )
 
+        import os
+        abs_workspace_dir = os.path.abspath(workspace_dir)
+        
+        # Path translation: Host -> Container
+        host_base = r"C:\random\Desktop\OpenHands\workspace"
+        container_base = "/opt/workspace_base"
+        
+        if abs_workspace_dir.startswith(host_base):
+            rel = os.path.relpath(abs_workspace_dir, host_base)
+            container_path = container_base + "/" + rel.replace(os.sep, "/")
+        else:
+            container_path = abs_workspace_dir
+            
+        log.info(
+            "openhands_path_resolution",
+            passed_workspace_dir=workspace_dir,
+            resolved_absolute_path=abs_workspace_dir,
+            sandbox_mount_path=container_path,
+            final_execution_directory=container_path,
+        )
+
         payload: dict[str, Any] = {
             "initial_message": {
                 "role": "user",
@@ -275,6 +296,7 @@ class OpenHandsClient(BaseAgent):
             },
             "system_message_suffix": system_suffix,
             "llm_model": self._model,
+            "selected_repository": container_path,
         }
 
         try:
@@ -337,15 +359,14 @@ class OpenHandsClient(BaseAgent):
 
             try:
                 response = httpx.get(
-                    f"{self._base_url}/api/v1/app-conversations/start-tasks/search",
-                    params={"conversation_id__eq": start_task_id},
+                    f"{self._base_url}/api/v1/app-conversations/start-tasks",
+                    params={"ids": [start_task_id]},
                     timeout=15.0,
                 )
                 if response.status_code == 200:
                     data = response.json()
-                    items = data.get("items", [])
-                    if items:
-                        task = items[0]
+                    if data and isinstance(data, list) and data[0]:
+                        task = data[0]
                         status = task.get("status", "UNKNOWN")
                         conv_id = task.get("app_conversation_id") or ""
 
