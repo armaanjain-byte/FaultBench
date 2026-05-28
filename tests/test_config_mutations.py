@@ -137,6 +137,8 @@ class TestMarkerBasedConfigMutations:
 
 
 EXAMPLE_DIR = Path(__file__).resolve().parent.parent / "examples" / "config_app"
+FLASK_EXAMPLE_DIR = Path(__file__).resolve().parent.parent / "examples" / "flask_app"
+FASTAPI_EXAMPLE_DIR = Path(__file__).resolve().parent.parent / "examples" / "fastapi_app"
 
 
 @pytest.fixture
@@ -175,3 +177,45 @@ class TestConfigExampleIntegration:
         with mutate(example_task_dir, mutation="malformed_config") as work_dir:
             with pytest.raises(json.JSONDecodeError):
                 get_database_url(work_dir)
+
+
+class TestFrameworkExampleIntegration:
+    def test_flask_example_passes_under_faultbench(self, pytester: pytest.Pytester):
+        shutil.copytree(FLASK_EXAMPLE_DIR, pytester.path, dirs_exist_ok=True)
+
+        result = pytester.runpytest("--faultbench")
+
+        result.assert_outcomes(passed=3)
+        result.stdout.fnmatch_lines(
+            [
+                "*FaultBench Summary*",
+                "Mutation: config_drift",
+                "Tests affected: 1",
+                "Failures detected: NO",
+                "Rollback successful: YES",
+                "Mutation: malformed_config",
+                "Tests affected: 1",
+                "Failures detected: NO",
+                "Rollback successful: YES",
+            ]
+        )
+
+    def test_fastapi_example_passes_under_faultbench(self, pytester: pytest.Pytester):
+        shutil.copytree(FASTAPI_EXAMPLE_DIR, pytester.path, dirs_exist_ok=True)
+
+        result = pytester.runpytest("--faultbench")
+
+        result.assert_outcomes(passed=3)
+        result.stdout.fnmatch_lines(
+            [
+                "*FaultBench Summary*",
+                "Mutation: config_drift",
+                "Tests affected: 1",
+                "Failures detected: NO",
+                "Rollback successful: YES",
+                "Mutation: malformed_config",
+                "Tests affected: 1",
+                "Failures detected: NO",
+                "Rollback successful: YES",
+            ]
+        )
