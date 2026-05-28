@@ -109,3 +109,47 @@ class TestMarkerBasedMutation:
     def test_original_task_dir_untouched(self, faultbench_workdir: Path, faultbench_task_dir: Path):
         """Mutation only affects copied workspace, not the source."""
         assert (faultbench_task_dir / "schema.sql").read_text() == SAMPLE_SQL
+
+
+# ---------------------------------------------------------------------------
+# Example app integration
+# ---------------------------------------------------------------------------
+
+EXAMPLE_DIR = Path(__file__).resolve().parent.parent / "examples" / "mini_app"
+
+
+@pytest.fixture
+def example_task_dir(tmp_path: Path) -> Path:
+    """Copy the example mini_app as a task directory."""
+    import shutil
+
+    dest = tmp_path / "mini_app"
+    shutil.copytree(EXAMPLE_DIR, dest)
+    return dest
+
+
+class TestExampleIntegration:
+    @staticmethod
+    def _load_validate_schema():
+        """Load validate_schema from the example app without sys.path hacks."""
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location(
+            "mini_app", EXAMPLE_DIR / "app.py"
+        )
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod.validate_schema
+
+    def test_example_baseline_passes(self, example_task_dir: Path):
+        """The example app validates its own unmodified schema."""
+        validate_schema = self._load_validate_schema()
+        result = validate_schema(example_task_dir)
+        assert "CREATE TABLE users" in result
+
+    def test_example_drift_breaks_validation(self, example_task_dir: Path, mutate):
+        """schema_drift mutation causes the example app to reject the schema."""
+        validate_schema = self._load_validate_schema()
+        with mutate(example_task_dir, mutation="schema_drift") as work_dir:
+            with pytest.raises(RuntimeError, match="Schema may have drifted"):
+                validate_schema(work_dir)
