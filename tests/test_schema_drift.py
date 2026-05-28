@@ -79,3 +79,33 @@ class TestMutateFixtureWithMutation:
         task = _make_task(tmp_path)
         with mutate(task) as work_dir:
             assert (work_dir / "schema.sql").read_text() == SAMPLE_SQL
+
+
+# ---------------------------------------------------------------------------
+# Marker-based tests
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def faultbench_task_dir(tmp_path: Path) -> Path:
+    """User-provided task dir for marker-based mutation tests."""
+    return _make_task(tmp_path)
+
+
+class TestMarkerBasedMutation:
+    @pytest.mark.faultbench(mutation="schema_drift")
+    def test_workdir_exists(self, faultbench_workdir: Path):
+        assert faultbench_workdir.exists()
+        assert faultbench_workdir.is_dir()
+
+    @pytest.mark.faultbench(mutation="schema_drift")
+    def test_schema_is_mutated(self, faultbench_workdir: Path):
+        assert (faultbench_workdir / "schema.sql").read_text() == EXPECTED_MUTATED
+
+    @pytest.mark.faultbench()
+    def test_no_mutation_preserves_schema(self, faultbench_workdir: Path):
+        assert (faultbench_workdir / "schema.sql").read_text() == SAMPLE_SQL
+
+    @pytest.mark.faultbench(mutation="schema_drift")
+    def test_original_task_dir_untouched(self, faultbench_workdir: Path, faultbench_task_dir: Path):
+        """Mutation only affects copied workspace, not the source."""
+        assert (faultbench_task_dir / "schema.sql").read_text() == SAMPLE_SQL
