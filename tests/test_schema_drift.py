@@ -43,6 +43,18 @@ class TestSchemaDriftMutation:
         m.rollback(task)
         assert (task / "schema.sql").read_text() == SAMPLE_SQL
 
+    def test_apply_ignores_word_boundaries(self, tmp_path: Path):
+        sql = "CREATE TABLE active_users (id INT);\n-- drop users table\nCREATE TABLE users (id INT);"
+        task = _make_task(tmp_path, sql)
+        m = SchemaDriftMutation()
+        m.apply(task)
+        
+        mutated = (task / "schema.sql").read_text()
+        assert "CREATE TABLE active_users" in mutated
+        assert "-- drop users_v2 table" in mutated
+        assert "CREATE TABLE users_v2 (id INT);" in mutated
+        assert "CREATE TABLE users " not in mutated
+
     def test_missing_schema_raises(self, tmp_path: Path):
         empty = tmp_path / "empty"
         empty.mkdir()

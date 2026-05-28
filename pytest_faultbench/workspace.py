@@ -19,4 +19,12 @@ def remove(path: Path) -> None:
         Path(fpath).chmod(stat.S_IWRITE)
         func(fpath)
 
-    shutil.rmtree(path, onerror=_on_error)
+    import sys
+
+    kwargs = {}
+    if sys.version_info >= (3, 12):
+        kwargs["onexc"] = _on_error
+    else:
+        kwargs["onerror"] = _on_error
+
+    shutil.rmtree(path, **kwargs)

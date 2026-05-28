@@ -12,15 +12,19 @@ class ConfigDriftMutation(BaseMutation):
         self._original: str | None = None
 
     def apply(self, work_dir: Path) -> None:
+        import json
+
         config = work_dir / "config.json"
         if not config.exists():
             raise RuntimeError(f"config.json not found in {work_dir}")
 
         self._original = config.read_text()
-        if "DATABASE_URL" not in self._original:
+        data = json.loads(self._original)
+        if "DATABASE_URL" not in data:
             raise RuntimeError("DATABASE_URL not found in config.json")
-
-        config.write_text(self._original.replace("DATABASE_URL", "DB_URL"))
+            
+        data["DB_URL"] = data.pop("DATABASE_URL")
+        config.write_text(json.dumps(data, indent=2))
 
     def rollback(self, work_dir: Path) -> None:
         if self._original is None:

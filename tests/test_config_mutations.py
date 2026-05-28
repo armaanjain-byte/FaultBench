@@ -10,23 +10,11 @@ from pytest_faultbench.mutations.config_drift import ConfigDriftMutation
 from pytest_faultbench.mutations.malformed_config import MalformedConfigMutation
 
 
-SAMPLE_CONFIG = """\
-{
-  "DATABASE_URL": "sqlite:///app.db"
-}
-"""
+SAMPLE_CONFIG = '{\n  "DATABASE_URL": "sqlite:///app.db"\n}'
 
-DRIFTED_CONFIG = """\
-{
-  "DB_URL": "sqlite:///app.db"
-}
-"""
+DRIFTED_CONFIG = '{\n  "DB_URL": "sqlite:///app.db"\n}'
 
-MALFORMED_CONFIG = """\
-{
-  "DATABASE_URL": "sqlite:///app.db"
-
-"""
+MALFORMED_CONFIG = '{\n  "DATABASE_URL": "sqlite:///app.db"\n'
 
 
 def _make_task(tmp_path: Path, config: str = SAMPLE_CONFIG) -> Path:
@@ -191,11 +179,15 @@ class TestFrameworkExampleIntegration:
                 "*FaultBench Summary*",
                 "Mutation: config_drift",
                 "Tests affected: 1",
-                "Failures detected: NO",
+                "Failures expected: 0",
+                "Failures actual: 0",
+                "Behavior matched expectation: YES",
                 "Rollback successful: YES",
                 "Mutation: malformed_config",
                 "Tests affected: 1",
-                "Failures detected: NO",
+                "Failures expected: 0",
+                "Failures actual: 0",
+                "Behavior matched expectation: YES",
                 "Rollback successful: YES",
             ]
         )
@@ -211,11 +203,15 @@ class TestFrameworkExampleIntegration:
                 "*FaultBench Summary*",
                 "Mutation: config_drift",
                 "Tests affected: 1",
-                "Failures detected: NO",
+                "Failures expected: 0",
+                "Failures actual: 0",
+                "Behavior matched expectation: YES",
                 "Rollback successful: YES",
                 "Mutation: malformed_config",
                 "Tests affected: 1",
-                "Failures detected: NO",
+                "Failures expected: 0",
+                "Failures actual: 0",
+                "Behavior matched expectation: YES",
                 "Rollback successful: YES",
             ]
         )

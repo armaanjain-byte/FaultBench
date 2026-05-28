@@ -12,19 +12,22 @@ class MalformedConfigMutation(BaseMutation):
         self._original: str | None = None
 
     def apply(self, work_dir: Path) -> None:
+        import json
+
         config = work_dir / "config.json"
         if not config.exists():
             raise RuntimeError(f"config.json not found in {work_dir}")
 
         self._original = config.read_text()
-        brace_index = self._original.rfind("}")
-        if brace_index == -1:
-            config.write_text(self._original)
+        
+        try:
+            data = json.loads(self._original)
+        except json.JSONDecodeError:
+            # already malformed
             return
-
-        config.write_text(
-            self._original[:brace_index] + self._original[brace_index + 1 :]
-        )
+            
+        serialized = json.dumps(data, indent=2)
+        config.write_text(serialized[:-1])
 
     def rollback(self, work_dir: Path) -> None:
         if self._original is None:

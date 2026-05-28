@@ -27,7 +27,9 @@ def _record_mutation(
         reports[mutation_name] = MutationReport(
             mutation_name=mutation_name,
             tests_affected=1,
-            failures_detected=False,
+            failures_expected=0,
+            failures_actual=0,
+            behavior_matched=True,
             rollback_successful=True,
         )
         return
@@ -91,13 +93,23 @@ def pytest_collection_modifyitems(
 def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo):
     outcome = yield
     report = outcome.get_result()
-    if report.when != "call" or not report.failed:
+    if report.when != "call":
         return
+
+    marker = item.get_closest_marker("faultbench")
+    expect_failure = bool(marker.kwargs.get("expect_failure")) if marker else False
+    failed = report.failed
 
     for mutation_name in getattr(item, "_faultbench_mutations", []):
         mutation_report = _faultbench_reports(item.config).get(mutation_name)
         if mutation_report is not None:
-            mutation_report.failures_detected = True
+            if expect_failure:
+                mutation_report.failures_expected += 1
+            if failed:
+                mutation_report.failures_actual += 1
+                
+            if failed != expect_failure:
+                mutation_report.behavior_matched = False
 
 
 def pytest_terminal_summary(
@@ -130,25 +142,16 @@ def mutate(request):
 
         mut = None
         try:
-            if mutation == "schema_drift":
-                from pytest_faultbench.mutations.schema_drift import SchemaDriftMutation
-
-                mut = SchemaDriftMutation()
-                mut.apply(work_dir)
-            elif mutation == "config_drift":
-                from pytest_faultbench.mutations.config_drift import ConfigDriftMutation
-
-                mut = ConfigDriftMutation()
-                mut.apply(work_dir)
-            elif mutation == "malformed_config":
-                from pytest_faultbench.mutations.malformed_config import (
-                    MalformedConfigMutation,
-                )
-
-                mut = MalformedConfigMutation()
-                mut.apply(work_dir)
-
             if mutation is not None:
+                from pytest_faultbench.mutations import MUTATION_REGISTRY
+
+                mutation_cls = MUTATION_REGISTRY.get(mutation)
+                if mutation_cls is None:
+                    raise RuntimeError(f"Unknown mutation: {mutation}")
+                
+                mut = mutation_cls()
+                mut.apply(work_dir)
+
                 _record_mutation(request.config, mutation)
                 mutations = getattr(request.node, "_faultbench_mutations", [])
                 mutations.append(mutation)

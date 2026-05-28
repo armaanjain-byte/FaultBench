@@ -12,12 +12,15 @@ class SchemaDriftMutation(BaseMutation):
         self._original: str | None = None
 
     def apply(self, work_dir: Path) -> None:
+        import re
+
         schema = work_dir / "schema.sql"
         if not schema.exists():
             raise RuntimeError(f"schema.sql not found in {work_dir}")
 
         self._original = schema.read_text()
-        schema.write_text(self._original.replace("users", "users_v2"))
+        new_schema = re.sub(r"\busers\b", "users_v2", self._original)
+        schema.write_text(new_schema)
 
     def rollback(self, work_dir: Path) -> None:
         if self._original is None:

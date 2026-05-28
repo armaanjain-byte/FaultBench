@@ -1,5 +1,0 @@
-site_title: "My Benchmark Site"
-content_dir: content
-output_dir: _site
-template_dir: templates
-template_name: base.html
