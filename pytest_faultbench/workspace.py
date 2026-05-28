@@ -15,8 +15,8 @@ def copy_to_tmp(source: Path, tmp_root: Path) -> Path:
 def remove(path: Path) -> None:
     """Remove directory tree, handling Windows read-only files."""
 
-    def _on_error(_func, fpath, _exc_info):
+    def _on_error(func, fpath, _exc_info):
         Path(fpath).chmod(stat.S_IWRITE)
-        Path(fpath).unlink()
+        func(fpath)
 
-    shutil.rmtree(path, onexc=_on_error)
+    shutil.rmtree(path, onerror=_on_error)
