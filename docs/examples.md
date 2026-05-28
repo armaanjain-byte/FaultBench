@@ -1,91 +1,28 @@
-# Examples
+# FaultBench Examples
 
-The examples are small on purpose. They show how faultbench tests map to realistic app assumptions without adding framework-specific support code.
+This document demonstrates how to use `pytest-faultbench` through realistic, engineering-focused patterns. These examples show how to leverage simple file mutations to simulate operational failures without heavy architectural additions.
 
-## mini_app
+## 1. Minimal Framework Setup (Basics)
 
-Location:
+- **`mini_app/`**: A minimal app using a simple schema validation function. Demonstrates `schema_drift` catching silent failures.
+- **`config_app/`**: A pure python app that requires `DATABASE_URL`. Demonstrates `config_drift`.
+- **`flask_app/` & `fastapi_app/`**: Small web apps validating that environment changes natively fail application startup using popular web frameworks.
 
-```text
-examples/mini_app
-```
+## 2. Real-World Failure Patterns
 
-Purpose:
+The following examples in `examples/real_world_patterns/` prove FaultBench's operational value across common industry outages:
 
-- demonstrates schema-focused validation
-- uses `schema.sql`
-- shows how `schema_drift` exposes assumptions about database structure
+### SQLAlchemy Config Break
+- **Location**: `sqlalchemy_config_break/`
+- **Simulates**: A standard file-based configuration regression where a mandatory key (e.g., `DATABASE_URL`) drops out of existence.
+- **Operational Value**: Ensures that the app strictly validates config and crashes predictably on boot rather than starting in a zombie state or defaulting to a dev database. Uses the `config_drift` mutation.
 
-Use this example when working on schema mutation behavior or rollback safety.
+### Environment Variable Drift
+- **Location**: `env_var_drift/`
+- **Simulates**: A deployment orchestrator (like Kubernetes or Docker Compose) renaming or dropping a required environment variable (e.g., `DATABASE_URL` -> `DB_URL`) before the application starts.
+- **Operational Value**: By reading the mutated `config.json` inside the pytest fixture and injecting it into `os.environ` using `monkeypatch`, we simulate infrastructure-level drift securely within workspace isolation.
 
-## config_app
-
-Location:
-
-```text
-examples/config_app
-```
-
-Purpose:
-
-- demonstrates plain Python config loading
-- uses `config.json`
-- shows how `config_drift` and `malformed_config` affect startup-style validation
-
-Use this example when working on config mutation behavior without framework dependencies.
-
-## flask_app
-
-Location:
-
-```text
-examples/flask_app
-```
-
-Purpose:
-
-- validates compatibility with a minimal Flask app
-- loads `DATABASE_URL` from `config.json`
-- exposes `/health`
-- raises at app creation if config is invalid
-
-The tests prove that faultbench can mutate a real Flask app workspace without Flask-specific plugin code.
-
-## fastapi_app
-
-Location:
-
-```text
-examples/fastapi_app
-```
-
-Purpose:
-
-- validates compatibility with a minimal FastAPI app
-- loads `DATABASE_URL` from `config.json`
-- exposes `/health`
-- raises at app creation if config is invalid
-
-The tests prove that faultbench can validate startup assumptions in FastAPI through normal pytest usage.
-
-## Running Examples
-
-Install example dependencies:
-
-```bash
-python -m pip install -e ".[examples]"
-```
-
-Run all project tests:
-
-```bash
-pytest
-pytest --faultbench
-```
-
-Run framework examples directly:
-
-```bash
-pytest examples/flask_app --faultbench
-pytest examples/fastapi_app --faultbench
-```
+### API Contract Break
+- **Location**: `api_contract_break/`
+- **Simulates**: A downstream microservice API suddenly changing its JSON response shape (e.g. `{"user_id": 123}` becomes `{"id": 123}`) or failing entirely (returning malformed HTML/JSON).
+- **Operational Value**: Rather than mutating a python configuration file, the test treats `config.json` as a mock API response payload. Running `config_drift` renames the key, simulating an unannounced API contract breakage and verifying the consumer strictly handles the violation.

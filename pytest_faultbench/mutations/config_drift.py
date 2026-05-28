@@ -20,10 +20,14 @@ class ConfigDriftMutation(BaseMutation):
 
         self._original = config.read_text()
         data = json.loads(self._original)
-        if "DATABASE_URL" not in data:
-            raise RuntimeError("DATABASE_URL not found in config.json")
+        
+        if "DATABASE_URL" in data:
+            data["DB_URL"] = data.pop("DATABASE_URL")
+        elif "user_id" in data:
+            data["id"] = data.pop("user_id")
+        else:
+            raise RuntimeError("Neither DATABASE_URL nor user_id found in config.json")
             
-        data["DB_URL"] = data.pop("DATABASE_URL")
         config.write_text(json.dumps(data, indent=2))
 
     def rollback(self, work_dir: Path) -> None:

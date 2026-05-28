@@ -46,9 +46,9 @@ class TestConfigDriftMutation:
             m.apply(empty)
 
     def test_missing_database_url_raises(self, tmp_path: Path):
-        task = _make_task(tmp_path, '{"DB_URL": "sqlite:///app.db"}\n')
+        task = _make_task(tmp_path, '{\n  "DB_URL": "sqlite:///app.db"\n}')
         m = ConfigDriftMutation()
-        with pytest.raises(RuntimeError, match="DATABASE_URL not found"):
+        with pytest.raises(RuntimeError, match="Neither DATABASE_URL nor user_id found"):
             m.apply(task)
 
 

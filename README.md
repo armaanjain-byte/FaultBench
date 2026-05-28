@@ -132,6 +132,16 @@ jobs:
 
 A mutation-caused failure in your application is often **GOOD**. It proves your tests successfully detected environmental breakage (like configuration drift or a missing schema). If a destructive mutation applies and causes *no* failures, it may indicate missing test coverage or hidden, dangerous assumptions that your app silently swallows. See [docs/ci.md](docs/ci.md) for more details.
 
+## Real-world failure patterns
+
+FaultBench helps you detect silent outages by demonstrating realistic environmental breakages across your tests. Rather than assuming the environment is static, it proves that your application correctly identifies:
+
+- **Configuration Drift**: A local config drops required keys (e.g., `DATABASE_URL` renamed).
+- **Environment Variable Drift**: A deployment orchestrator silently mangles environment state (simulated by dynamically mapping mutated config files to `os.environ` inside your tests).
+- **API Contract Breaks**: A downstream microservice API suddenly changes its JSON response payload shape (e.g., `user_id` -> `id`), caught cleanly without complex mocking frameworks.
+
+See [docs/examples.md](docs/examples.md) for these engineering-focused examples.
+
 ## Supported Mutations
 
 - `schema_drift`: renames `users` to `users_v2` in `schema.sql`
