@@ -5,9 +5,9 @@ import hashlib
 import os
 from typing import Any
 
-from models import User
-from database import init_db, insert_user, get_user_by_username
-from token_manager import create_token, verify_token
+from tasks.task_003_user_auth.models import User
+from tasks.task_003_user_auth.database import init_db, insert_user, get_user_by_username
+from tasks.task_003_user_auth.token_manager import create_token, verify_token
 
 
 def _hash_password(password: str, salt: str) -> str:

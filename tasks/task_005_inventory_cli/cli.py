@@ -4,7 +4,7 @@ from __future__ import annotations
 import click
 import yaml
 
-from inventory import add_item, remove_item, list_items, search_items, update_quantity
+from tasks.task_005_inventory_cli.inventory import add_item, remove_item, list_items, search_items, update_quantity
 
 
 def _load_config() -> dict:

@@ -5,7 +5,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-from models import User
+from tasks.task_003_user_auth.models import User
 
 
 DB_PATH = "users.db"

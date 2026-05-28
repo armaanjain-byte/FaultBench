@@ -17,10 +17,10 @@ import yaml
 # Ensure the task root is importable
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from token_manager import create_token, verify_token  # noqa: E402
-from auth import register, login, authenticate_request  # noqa: E402
-from database import init_db, DB_PATH  # noqa: E402
-import database as db_mod  # noqa: E402
+from tasks.task_003_user_auth.token_manager import create_token, verify_token  # noqa: E402
+from tasks.task_003_user_auth.auth import register, login, authenticate_request  # noqa: E402
+from tasks.task_003_user_auth.database import init_db, DB_PATH  # noqa: E402
+import tasks.task_003_user_auth.database as db_mod  # noqa: E402
 
 
 @pytest.fixture(autouse=True)

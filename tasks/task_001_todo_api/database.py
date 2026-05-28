@@ -21,7 +21,7 @@ SessionLocal = scoped_session(sessionmaker(bind=engine))
 
 def init_db() -> None:
     """Create all tables defined by the ORM models."""
-    from models import Todo  # noqa: F401 — ensure model is registered
+    from tasks.task_001_todo_api.models import Todo  # noqa: F401 — ensure model is registered
     Base.metadata.create_all(bind=engine)
 
 

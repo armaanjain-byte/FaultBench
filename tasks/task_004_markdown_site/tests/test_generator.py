@@ -13,9 +13,9 @@ import pytest
 # Ensure the task root is importable
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from parser import parse_markdown, extract_title  # noqa: E402
-from templates import render_page  # noqa: E402
-from generator import generate_site  # noqa: E402
+from tasks.task_004_markdown_site.parser import parse_markdown, extract_title  # noqa: E402
+from tasks.task_004_markdown_site.templates import render_page  # noqa: E402
+from tasks.task_004_markdown_site.generator import generate_site  # noqa: E402
 
 
 # ------------------------------------------------------------------

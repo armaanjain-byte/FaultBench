@@ -6,8 +6,8 @@ from typing import Any
 
 import yaml
 
-from parser import parse_markdown, extract_title
-from templates import render_page
+from tasks.task_004_markdown_site.parser import parse_markdown, extract_title
+from tasks.task_004_markdown_site.templates import render_page
 
 
 def load_config(config_path: str = "config.yaml") -> dict[str, Any]:

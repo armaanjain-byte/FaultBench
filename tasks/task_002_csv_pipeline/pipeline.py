@@ -8,8 +8,8 @@ from typing import Any
 
 import yaml
 
-from transformers import clean_row, calculate_running_totals
-from validators import validate_dataset
+from tasks.task_002_csv_pipeline.transformers import clean_row, calculate_running_totals
+from tasks.task_002_csv_pipeline.validators import validate_dataset
 
 
 def load_config(config_path: str = "config.yaml") -> dict[str, Any]:

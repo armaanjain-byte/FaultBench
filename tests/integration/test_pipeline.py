@@ -110,7 +110,7 @@ def test_openhands_alive_check() -> None:
 
 def test_openhands_client_is_available() -> None:
     """OpenHandsClient.is_available() returns correct bool."""
-    from faultbench.agent.openhands_client import OpenHandsClient
+    from archive.faultbench.agent.openhands_client import OpenHandsClient
 
     client = OpenHandsClient(base_url=OPENHANDS_BASE_URL)
     # Just check it returns a bool — value depends on whether OH is running
@@ -121,7 +121,7 @@ def test_openhands_client_is_available() -> None:
 @requires_openhands
 def test_openhands_client_available_true() -> None:
     """OpenHandsClient.is_available() returns True when server is up."""
-    from faultbench.agent.openhands_client import OpenHandsClient
+    from archive.faultbench.agent.openhands_client import OpenHandsClient
 
     client = OpenHandsClient(base_url=OPENHANDS_BASE_URL)
     assert client.is_available() is True
@@ -134,9 +134,9 @@ def test_openhands_client_available_true() -> None:
 
 def test_verify_task_passes_when_hello_py_correct(tmp_path: Path) -> None:
     """_verify_task returns success=True when hello.py outputs 'hello world'."""
-    from faultbench.engine.lifecycle import _verify_task
-    from faultbench.models import TaskConfig
-    from faultbench.constants import MutationType
+    from archive.faultbench.engine.lifecycle import _verify_task
+    from archive.faultbench.models import TaskConfig
+    from archive.faultbench.constants import MutationType
 
     # Create a correct hello.py
     hello = tmp_path / "hello.py"
@@ -167,8 +167,8 @@ def test_verify_task_passes_when_hello_py_correct(tmp_path: Path) -> None:
 
 def test_verify_task_fails_when_hello_py_wrong(tmp_path: Path) -> None:
     """_verify_task returns success=False when hello.py has the typo."""
-    from faultbench.engine.lifecycle import _verify_task
-    from faultbench.models import TaskConfig
+    from archive.faultbench.engine.lifecycle import _verify_task
+    from archive.faultbench.models import TaskConfig
 
     # Create the WRONG hello.py (original faulty state)
     hello = tmp_path / "hello.py"
@@ -204,7 +204,7 @@ def test_verify_task_fails_when_hello_py_wrong(tmp_path: Path) -> None:
 
 def test_hello_world_task_loads() -> None:
     """task_hello_world loads successfully via load_task_configs."""
-    from faultbench.engine.orchestrator import load_task_configs
+    from archive.faultbench.engine.orchestrator import load_task_configs
 
     tasks_dir = REPO_ROOT / "tasks"
     assert tasks_dir.exists()
@@ -249,11 +249,11 @@ def test_hello_world_baseline(hello_world_workdir: Path) -> None:
 
     This test consumes real LLM tokens and may take 2-10 minutes.
     """
-    from faultbench.agent.openhands_client import OpenHandsClient
-    from faultbench.config import load_config
-    from faultbench.constants import MutationType
-    from faultbench.engine.lifecycle import execute_single_run
-    from faultbench.models import TaskConfig
+    from archive.faultbench.agent.openhands_client import OpenHandsClient
+    from archive.faultbench.config import load_config
+    from archive.faultbench.constants import MutationType
+    from archive.faultbench.engine.lifecycle import execute_single_run
+    from archive.faultbench.models import TaskConfig
 
     # Load global config
     config = load_config(force_reload=True)
@@ -308,7 +308,7 @@ def test_hello_world_baseline(hello_world_workdir: Path) -> None:
 def test_hello_world_via_cli(tmp_path: Path) -> None:
     """Run hello_world benchmark through the CLI and check it succeeds."""
     from click.testing import CliRunner
-    from faultbench.cli import main
+    from archive.faultbench.cli import main
 
     runner = CliRunner()
 

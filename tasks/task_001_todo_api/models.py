@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from sqlalchemy import Column, Integer, String, Boolean, DateTime
-from database import Base
+from tasks.task_001_todo_api.database import Base
 
 
 class Todo(Base):

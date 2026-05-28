@@ -68,8 +68,8 @@ def test_load_config_returns_defaults(tmp_path, monkeypatch) -> None:
     # Point CWD to a temp directory so no config.yaml is found
     monkeypatch.chdir(tmp_path)
 
-    from faultbench.config import load_config, reset_config_cache
-    from faultbench.models import BenchmarkConfig
+    from archive.faultbench.config import load_config, reset_config_cache
+    from archive.faultbench.models import BenchmarkConfig
 
     reset_config_cache()
     cfg = load_config(force_reload=True)
@@ -101,9 +101,9 @@ TASK_DIRS = [
 @pytest.mark.parametrize("task_dir", TASK_DIRS, ids=[d.name for d in TASK_DIRS])
 def test_all_mutation_specs_load(task_dir: Path) -> None:
     """All 5 mutation specs load from every task's mutations.yaml."""
-    from faultbench.constants import MutationType
-    from faultbench.models import MutationSpec
-    from faultbench.mutations.registry import get_mutation_spec
+    from archive.faultbench.constants import MutationType
+    from archive.faultbench.models import MutationSpec
+    from archive.faultbench.mutations.registry import get_mutation_spec
 
     for mt in MutationType:
         spec = get_mutation_spec(task_dir, mt)
@@ -120,8 +120,8 @@ def test_all_mutation_specs_load(task_dir: Path) -> None:
 
 def test_mutation_registry_covers_all_types() -> None:
     """MUTATION_REGISTRY has an entry for every MutationType."""
-    from faultbench.constants import MutationType
-    from faultbench.mutations.registry import MUTATION_REGISTRY
+    from archive.faultbench.constants import MutationType
+    from archive.faultbench.mutations.registry import MUTATION_REGISTRY
 
     for mt in MutationType:
         assert mt in MUTATION_REGISTRY, f"MutationType.{mt.name} not in MUTATION_REGISTRY"
@@ -129,9 +129,9 @@ def test_mutation_registry_covers_all_types() -> None:
 
 def test_get_mutation_returns_instance() -> None:
     """get_mutation() returns a concrete BaseMutation instance for each type."""
-    from faultbench.constants import MutationType
-    from faultbench.mutations.base import BaseMutation
-    from faultbench.mutations.registry import get_mutation
+    from archive.faultbench.constants import MutationType
+    from archive.faultbench.mutations.base import BaseMutation
+    from archive.faultbench.mutations.registry import get_mutation
 
     for mt in MutationType:
         instance = get_mutation(mt)
@@ -148,7 +148,7 @@ def test_cli_main_is_callable() -> None:
     """faultbench.cli.main is a Click group with the expected commands."""
     import click
 
-    from faultbench.cli import main
+    from archive.faultbench.cli import main
 
     assert callable(main)
     assert isinstance(main, click.Group)
@@ -161,7 +161,7 @@ def test_cli_run_help(capsys) -> None:
     """CLI run --help exits cleanly."""
     from click.testing import CliRunner
 
-    from faultbench.cli import main
+    from archive.faultbench.cli import main
 
     runner = CliRunner()
     result = runner.invoke(main, ["run", "--help"])
@@ -192,11 +192,11 @@ def test_cli_mutation_none_maps_to_baseline(monkeypatch, tmp_path) -> None:
     )
 
     from click.testing import CliRunner
-    from faultbench.cli import main
+    from archive.faultbench.cli import main
 
     runner = CliRunner()
     # We patch run_benchmark via the orchestrator module that cli imports
-    import faultbench.engine.orchestrator as orch_mod
+    import archive.faultbench.engine.orchestrator as orch_mod
     original = orch_mod.run_benchmark
     orch_mod.run_benchmark = fake_run_benchmark
     try:

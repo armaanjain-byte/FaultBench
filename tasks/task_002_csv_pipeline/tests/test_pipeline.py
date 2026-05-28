@@ -10,9 +10,9 @@ import pytest
 # Ensure the task root is on the import path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from transformers import clean_row, calculate_running_totals  # noqa: E402
-from validators import validate_row, validate_numeric  # noqa: E402
-from pipeline import read_csv, run_pipeline  # noqa: E402
+from tasks.task_002_csv_pipeline.transformers import clean_row, calculate_running_totals  # noqa: E402
+from tasks.task_002_csv_pipeline.validators import validate_row, validate_numeric  # noqa: E402
+from tasks.task_002_csv_pipeline.pipeline import read_csv, run_pipeline  # noqa: E402
 
 
 # ------------------------------------------------------------------

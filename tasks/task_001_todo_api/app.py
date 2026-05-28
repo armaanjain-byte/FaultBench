@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 from flask import Flask, request, jsonify
-from database import init_db, get_session
-from models import Todo
+from tasks.task_001_todo_api.database import init_db, get_session
+from tasks.task_001_todo_api.models import Todo
 
 app = Flask(__name__)
 

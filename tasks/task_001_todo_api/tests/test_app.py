@@ -10,8 +10,8 @@ import pytest
 # Ensure the task root is on the import path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from app import app  # noqa: E402
-from database import engine, Base, SessionLocal  # noqa: E402
+from tasks.task_001_todo_api.app import app  # noqa: E402
+from tasks.task_001_todo_api.database import engine, Base, SessionLocal  # noqa: E402
 
 
 @pytest.fixture(autouse=True)

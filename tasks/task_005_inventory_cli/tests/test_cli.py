@@ -14,8 +14,8 @@ from click.testing import CliRunner
 # Ensure the task root is importable
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from inventory import add_item, remove_item, list_items, search_items, update_quantity  # noqa: E402
-from cli import cli  # noqa: E402
+from tasks.task_005_inventory_cli.inventory import add_item, remove_item, list_items, search_items, update_quantity  # noqa: E402
+from tasks.task_005_inventory_cli.cli import cli  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -23,8 +23,8 @@ def _clean_inventory(tmp_path):
     """Use a temporary JSON file for every test."""
     storage = str(tmp_path / "test_inventory.json")
     # Monkey-patch at module level so the CLI also picks it up
-    import inventory as inv_mod
-    import storage as sto_mod
+    import tasks.task_005_inventory_cli.inventory as inv_mod
+    import tasks.task_005_inventory_cli.storage as sto_mod
 
     original_get = sto_mod._get_storage_path
 

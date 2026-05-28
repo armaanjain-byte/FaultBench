@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from storage import load_inventory, save_inventory, next_id
+from tasks.task_005_inventory_cli.storage import load_inventory, save_inventory, next_id
 
 
 def add_item(
