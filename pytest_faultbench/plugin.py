@@ -129,31 +129,31 @@ def mutate(request):
         rollback_successful = True
 
         mut = None
-        if mutation == "schema_drift":
-            from pytest_faultbench.mutations.schema_drift import SchemaDriftMutation
-
-            mut = SchemaDriftMutation()
-            mut.apply(work_dir)
-        elif mutation == "config_drift":
-            from pytest_faultbench.mutations.config_drift import ConfigDriftMutation
-
-            mut = ConfigDriftMutation()
-            mut.apply(work_dir)
-        elif mutation == "malformed_config":
-            from pytest_faultbench.mutations.malformed_config import (
-                MalformedConfigMutation,
-            )
-
-            mut = MalformedConfigMutation()
-            mut.apply(work_dir)
-
-        if mutation is not None:
-            _record_mutation(request.config, mutation)
-            mutations = getattr(request.node, "_faultbench_mutations", [])
-            mutations.append(mutation)
-            setattr(request.node, "_faultbench_mutations", mutations)
-
         try:
+            if mutation == "schema_drift":
+                from pytest_faultbench.mutations.schema_drift import SchemaDriftMutation
+
+                mut = SchemaDriftMutation()
+                mut.apply(work_dir)
+            elif mutation == "config_drift":
+                from pytest_faultbench.mutations.config_drift import ConfigDriftMutation
+
+                mut = ConfigDriftMutation()
+                mut.apply(work_dir)
+            elif mutation == "malformed_config":
+                from pytest_faultbench.mutations.malformed_config import (
+                    MalformedConfigMutation,
+                )
+
+                mut = MalformedConfigMutation()
+                mut.apply(work_dir)
+
+            if mutation is not None:
+                _record_mutation(request.config, mutation)
+                mutations = getattr(request.node, "_faultbench_mutations", [])
+                mutations.append(mutation)
+                setattr(request.node, "_faultbench_mutations", mutations)
+
             yield work_dir
         finally:
             try:
@@ -161,11 +161,17 @@ def mutate(request):
                     mut.rollback(work_dir)
             except Exception:
                 rollback_successful = False
-                raise
+                if mutation is not None:
+                    import sys
+                    print(f"\n[FaultBench Warning] Rollback failed for mutation: {mutation}", file=sys.stderr)
             finally:
                 if mutation is not None:
                     _record_rollback(request.config, mutation, rollback_successful)
-                remove(tmp_root)
+                try:
+                    remove(tmp_root)
+                except Exception:
+                    import sys
+                    print(f"\n[FaultBench Warning] Cleanup failed for workspace: {tmp_root}", file=sys.stderr)
 
     return _mutate
 
