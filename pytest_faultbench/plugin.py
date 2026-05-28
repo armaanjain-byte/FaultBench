@@ -71,6 +71,18 @@ def mutate():
 
             mut = SchemaDriftMutation()
             mut.apply(work_dir)
+        elif mutation == "config_drift":
+            from pytest_faultbench.mutations.config_drift import ConfigDriftMutation
+
+            mut = ConfigDriftMutation()
+            mut.apply(work_dir)
+        elif mutation == "malformed_config":
+            from pytest_faultbench.mutations.malformed_config import (
+                MalformedConfigMutation,
+            )
+
+            mut = MalformedConfigMutation()
+            mut.apply(work_dir)
 
         try:
             yield work_dir
