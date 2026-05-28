@@ -50,12 +50,22 @@ def mutate():
     """Provide a context-manager that copies a task dir into a temp workspace."""
 
     @contextmanager
-    def _mutate(task_dir: Path):
+    def _mutate(task_dir: Path, *, mutation: str | None = None):
         tmp_root = Path(tempfile.mkdtemp())
         work_dir = copy_to_tmp(task_dir, tmp_root)
+
+        mut = None
+        if mutation == "schema_drift":
+            from pytest_faultbench.mutations.schema_drift import SchemaDriftMutation
+
+            mut = SchemaDriftMutation()
+            mut.apply(work_dir)
+
         try:
             yield work_dir
         finally:
+            if mut is not None:
+                mut.rollback(work_dir)
             remove(tmp_root)
 
     return _mutate

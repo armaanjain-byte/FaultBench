@@ -16,3 +16,7 @@ class MutationResult:
     applied: bool
     rolled_back: bool
     error: str | None
+
+
+class MutationExecutionError(Exception):
+    pass
