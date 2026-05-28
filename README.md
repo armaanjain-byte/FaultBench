@@ -105,6 +105,33 @@ Rollback successful: YES
 
 `Failures detected: NO` means no test failed while that mutation was active. That can be expected if the test asserts graceful handling, or it can signal a resilience gap if the mutation should have been detected by the application.
 
+## Continuous Integration
+
+Running FaultBench in CI proves your app's resilience assumptions in a clean, non-local environment. Because it is a simple pytest plugin, integration is trivial:
+
+```yaml
+# .github/workflows/tests.yml
+name: Tests
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      
+      - run: pip install -e . pytest
+      - run: pytest -v
+      - run: pytest --faultbench -v
+```
+
+**Why are mutation failures useful?**
+
+A mutation-caused failure in your application is often **GOOD**. It proves your tests successfully detected environmental breakage (like configuration drift or a missing schema). If a destructive mutation applies and causes *no* failures, it may indicate missing test coverage or hidden, dangerous assumptions that your app silently swallows. See [docs/ci.md](docs/ci.md) for more details.
+
 ## Supported Mutations
 
 - `schema_drift`: renames `users` to `users_v2` in `schema.sql`
