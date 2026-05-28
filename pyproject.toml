@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pytest-faultbench"
+version = "0.1.0"
+description = "A pytest plugin for fault-injection benchmarking."
+requires-python = ">=3.10"
+dependencies = ["pytest>=7.0"]
+
+[project.entry-points.pytest11]
+faultbench = "pytest_faultbench.plugin"
+
+[tool.setuptools.packages.find]
+include = ["pytest_faultbench*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
