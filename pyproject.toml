@@ -5,9 +5,25 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "pytest-faultbench"
 version = "0.1.0"
-description = "A pytest plugin for fault-injection benchmarking."
+description = "Resilience testing for environmental and infrastructure assumptions."
 requires-python = ">=3.10"
 dependencies = ["pytest>=7.0"]
+keywords = [
+    "pytest",
+    "resilience",
+    "fault-injection",
+    "configuration",
+    "infrastructure",
+    "testing",
+]
+
+[project.optional-dependencies]
+examples = [
+    "fastapi",
+    "flask",
+    "httpx",
+    "uvicorn",
+]
 
 [project.entry-points.pytest11]
 faultbench = "pytest_faultbench.plugin"

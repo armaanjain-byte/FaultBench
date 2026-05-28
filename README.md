@@ -1,229 +1,176 @@
-# FaultBench
+# pytest-faultbench
 
-> Stress-test coding agents under adversarial runtime conditions.
+Resilience testing for environmental and infrastructure assumptions.
 
-FaultBench benchmarks AI coding agent robustness by injecting controlled environmental failures into software engineering tasks.
+`pytest-faultbench` is a small pytest plugin for checking how an application behaves when common runtime assumptions are broken. It mutates an isolated copy of a task or app workspace, runs normal pytest tests against that mutated workspace, rolls the mutation back, and prints a compact terminal summary.
 
-Most benchmarks measure correctness in clean environments. Real environments are not clean.
+It is not an observability platform, a mutation testing clone, or a framework abstraction layer. It is a focused tool for making hidden assumptions visible during tests.
 
----
+## Problem Statement
 
-## The Problem
+Applications often assume their environment is stable:
 
-SWE-bench, HumanEval, and similar benchmarks answer: *can the agent solve the task?*
+- database schema names are unchanged
+- required config keys exist
+- config files parse correctly
+- startup validation catches bad infrastructure state
 
-They don't answer: *can the agent solve the task when the environment breaks?*
+Those assumptions fail in production-like systems. `pytest-faultbench` gives contributors a simple way to encode those failure modes as pytest tests and verify that the app detects or survives them.
 
-Dependencies drift. Configs corrupt. Files disappear. APIs change schemas mid-workflow. A model that achieves 40% on SWE-bench in a stable sandbox may collapse entirely when a single config value is malformed.
+## Core Concept
 
-FaultBench isolates and measures that robustness gap.
+A faultbench test runs inside an isolated workspace:
 
----
+1. copy the target task/app directory to a temporary workspace
+2. apply one named mutation
+3. run the test against the mutated copy
+4. roll the mutation back
+5. remove the temporary workspace
+6. report whether the mutation caused a test failure and whether rollback succeeded
 
-## How It Works
+The original files are not mutated.
 
-A coding agent is given a software engineering task inside a Docker sandbox.
+## Installation
 
-FaultBench injects a controlled mutation into the environment before or during execution:
-
-```
-Task Repo
-    ↓
-Mutation Injector  ←── deterministic, causal, reproducible
-    ↓
-Docker Sandbox
-    ↓
-Coding Agent
-    ↓
-Execution Trace Collector
-    ↓
-Metrics Extractor
-    ↓
-SQLite Benchmark DB
-    ↓
-Comparator + Report Generator
-```
-
-After execution, FaultBench records success rate, retry count, runtime, token usage, crash count, and first failure step — then diffs baseline vs. mutated performance.
-
----
-
-## Mutation Types
-
-| Mutation | Example | What It Tests |
-|---|---|---|
-| **Schema Drift** | Rename a database column the agent depends on | Can the agent detect and adapt to interface changes? |
-| **Dependency Drift** | Pin a package to an incompatible version | Does the agent handle import failures gracefully? |
-| **Config Corruption** | Inject malformed YAML into the app config | Does the agent debug config errors or loop? |
-| **Missing File** | Delete a utility module mid-task | Can the agent reconstruct or route around missing dependencies? |
-| **API Drift** | Change a response schema the agent parses | Does the agent handle contract violations? |
-
-All mutations are deterministic and causal — they directly affect the task execution path. Random corruption produces noise, not signal.
-
----
-
-## Example Results
-
-<!-- Results chart placeholder -->
-![Robustness degradation chart](docs/results_chart.png)
-
-| Mutation | Baseline | Mutated | Degradation |
-|---|---|---|---|
-| Schema Drift | 81% | 34% | **-58%** |
-| Dependency Drift | 78% | 41% | **-47%** |
-| Config Corruption | 81% | 29% | **-64%** |
-| Missing File | 81% | 22% | **-73%** |
-
-Config corruption and missing files are the hardest failures. Agents that handle dependency drift reasonably often collapse completely when a utility module disappears.
-
----
-
-## Metrics Collected
-
-| Metric | Purpose |
-|---|---|
-| `success` | Primary task completion signal |
-| `retry_count` | Detects looping and flailing behavior |
-| `runtime_seconds` | Measures execution overhead under instability |
-| `tokens_used` | Quantifies recovery cost in context budget |
-| `exception_count` | Crash frequency per run |
-| `first_failure_step` | Localizes where degradation begins |
-
-FaultBench aggregates over multiple runs rather than reporting single-trial outcomes. Agents are nondeterministic; distributions are meaningful, individual results are not.
-
----
-
-## Differentiation
-
-| Benchmark | What It Measures |
-|---|---|
-| SWE-bench | Correctness on real GitHub issues (stable env) |
-| HumanEval | Code generation quality |
-| MMLU | General reasoning |
-| **FaultBench** | **Robustness under environmental instability** |
-
-FaultBench is not a replacement for SWE-bench. It measures a different axis: not whether an agent can solve a task, but whether it can still solve it when the environment degrades.
-
----
-
-## Technical Stack
-
-| Layer | Technology |
-|---|---|
-| Backend | Python + FastAPI |
-| Sandbox | Docker |
-| Task Queue | Celery / Dramatiq |
-| Database | SQLite |
-| Reporting | Jinja2 + Matplotlib |
-| Frontend | Next.js |
-| Agent Runtime | OpenHands-compatible |
-| Orchestration | Docker Compose |
-
----
-
-## Design Principles
-
-**Reproducibility first.** Every benchmark run must reproduce on another machine. No hidden infrastructure, no cloud dependencies required.
-
-**Mutations must be causal.** A mutation only counts if it directly affects the task execution path. Irrelevant mutations produce noise, not signal.
-
-**Aggregate, don't cherry-pick.** Metrics are distributions over multiple runs, not single-trial outcomes.
-
-**Minimal infrastructure.** SQLite over Postgres. Docker Compose over Kubernetes. Complexity kills research tooling early.
-
----
-
-## Repository Structure
-
-```
-faultbench/
-│
-├── backend/           # FastAPI server, job orchestration
-├── frontend/          # Next.js dashboard
-├── workers/           # Celery/Dramatiq task workers
-├── sdk/               # Python SDK for defining tasks and mutations
-├── benchmarks/        # pre-defined benchmark task definitions
-├── tasks/             # individual task repos
-├── reports/           # generated benchmark reports
-├── docs/              # screenshots, architecture diagrams
-├── docker/            # Dockerfile definitions
-├── scripts/           # setup and utility scripts
-├── tests/             # test suite
-│
-├── config.yaml
-├── docker-compose.yml
-├── requirements.txt
-├── CONTRIBUTING.md
-└── .env.example
-```
-
----
-
-## Quick Start
+From a local checkout:
 
 ```bash
-git clone https://github.com/armaanjain-byte/faultbench.git
-cd faultbench
-
-cp .env.example .env
-
-docker compose up
-
-python main.py benchmark
+python -m pip install -e .
 ```
 
----
+To run the Flask and FastAPI examples, install the optional example dependencies:
+
+```bash
+python -m pip install -e ".[examples]"
+```
+
+## Quickstart
+
+Write a test that declares a target workspace and marks the mutation to apply:
+
+```python
+from pathlib import Path
+
+import pytest
+
+
+@pytest.fixture
+def faultbench_task_dir() -> Path:
+    return Path("examples/config_app")
+
+
+@pytest.mark.faultbench(mutation="config_drift")
+def test_app_rejects_missing_database_url(faultbench_workdir: Path):
+    from app import get_database_url
+
+    with pytest.raises(RuntimeError, match="DATABASE_URL missing"):
+        get_database_url(faultbench_workdir)
+```
+
+Run faultbench tests explicitly:
+
+```bash
+pytest --faultbench
+```
+
+Tests using `mutate`, `faultbench_workdir`, or `@pytest.mark.faultbench` are skipped unless `--faultbench` is provided.
+
+## Example Mutation Workflow
+
+For a `config.json` file like:
+
+```json
+{
+  "DATABASE_URL": "sqlite:///app.db"
+}
+```
+
+The `config_drift` mutation rewrites `DATABASE_URL` to `DB_URL` inside the temporary workspace. Your test can then assert that app startup fails clearly instead of silently continuing with invalid configuration.
+
+## Example Terminal Output
+
+```text
+================ FaultBench Summary ================
+
+Mutation: config_drift
+Tests affected: 1
+Failures detected: NO
+Rollback successful: YES
+
+Mutation: malformed_config
+Tests affected: 1
+Failures detected: NO
+Rollback successful: YES
+```
+
+`Failures detected: NO` means no test failed while that mutation was active. That can be expected if the test asserts graceful handling, or it can signal a resilience gap if the mutation should have been detected by the application.
+
+## Supported Mutations
+
+- `schema_drift`: renames `users` to `users_v2` in `schema.sql`
+- `config_drift`: renames `DATABASE_URL` to `DB_URL` in `config.json`
+- `malformed_config`: removes the final closing brace from `config.json`
+
+See [docs/mutations.md](docs/mutations.md) for details.
+
+## Framework Compatibility
+
+`pytest-faultbench` does not use framework-specific adapters. It works through pytest fixtures and temporary workspaces.
+
+Current examples validate:
+
+- plain Python config loading
+- a minimal schema-backed app
+- Flask startup validation
+- FastAPI startup validation
+
+See [docs/examples.md](docs/examples.md).
+
+## Project Philosophy
+
+- Prefer small, realistic failure modes over broad simulation.
+- Keep pytest as the integration surface.
+- Keep mutations explicit and easy to inspect.
+- Keep reporting terminal-first and readable.
+- Avoid persistence, dashboards, telemetry, and framework-specific runtime hooks.
 
 ## Roadmap
 
-**v1 — Local, reproducible benchmarks**
-- Pre-execution mutations
-- OpenHands agent integration
-- SQLite benchmark storage
-- HTML reports
-- 5 benchmark tasks
+Near-term:
 
-**v2 — Scale + comparison**
-- Mid-execution mutations (injected during agent run)
-- Multi-agent comparisons
-- Distributed benchmarking
-- Replayable traces
-- Visual benchmark dashboard
+- document more realistic failure patterns
+- improve example coverage around common infrastructure assumptions
+- keep rollback behavior simple and well tested
 
-**v3 — Standard + ecosystem**
-- Mutation generation engine
-- Benchmark task marketplace
-- Public leaderboard
-- Robustness scoring standard
+Later:
 
----
+- add carefully scoped mutations when backed by real use cases
+- improve contributor guidance for adding examples
+- evaluate packaging and release workflow once the core behavior settles
 
-## Research Questions FaultBench Answers
+Non-goals for now:
 
-- Which mutation types degrade agents most severely?
-- Which agents exhibit robust recovery vs. hard failure?
-- Are retry loops useful or wasteful under environmental instability?
-- What is the token cost of degraded environments?
-- Where do autonomous coding systems break first?
+- dashboards
+- databases
+- cloud execution
+- CI orchestration
+- plugin registries
+- telemetry
 
----
+## Contributing
 
-## Long-Term Goal
+Start by reading:
 
-Establish the standard robustness benchmark for autonomous software engineering agents.
+- [docs/architecture.md](docs/architecture.md)
+- [docs/mutations.md](docs/mutations.md)
+- [docs/examples.md](docs/examples.md)
 
-Not *"can the agent solve the task?"*
+Development loop:
 
-But: *"can the agent still solve it when reality becomes messy?"*
+```bash
+python -m pip install -e ".[examples]"
+pytest
+pytest --faultbench
+```
 
----
-
-## Author
-
-**Armaan Jain** · [github.com/armaanjain-byte](https://github.com/armaanjain-byte)
-
----
-
-## License
-
-Apache - 2.0 License
+Keep contributions focused. New behavior should preserve workspace isolation, rollback safety, and minimal terminal reporting.
