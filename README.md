@@ -1,213 +1,338 @@
-# pytest-faultbench
+# FaultBench
 
 Resilience testing for environmental and infrastructure assumptions.
 
-`pytest-faultbench` is a small pytest plugin for checking how an application behaves when common runtime assumptions are broken. It mutates an isolated copy of a task or app workspace, runs normal pytest tests against that mutated workspace, rolls the mutation back, and prints a compact terminal summary.
+`pytest-faultbench` is a pytest plugin that injects controlled faults into an isolated copy of your application workspace, runs your tests against the mutated environment, rolls everything back, and reports what broke and whether it broke correctly.
 
-It is not an observability platform, a mutation testing clone, or a framework abstraction layer. It is a focused tool for making hidden assumptions visible during tests.
+It is not a fuzzer. It is not a chaos engineering platform. It is a focused tool for one specific problem: **your tests pass, but they only test what you expect to happen — not what happens when the environment stops matching your assumptions.**
 
-## Problem Statement
+---
 
-Applications often assume their environment is stable:
+## The Problem
 
-- database schema names are unchanged
-- required config keys exist
-- config files parse correctly
-- startup validation catches bad infrastructure state
+Applications carry hidden assumptions:
 
-Those assumptions fail in production-like systems. `pytest-faultbench` gives contributors a simple way to encode those failure modes as pytest tests and verify that the app detects or survives them.
+- A config file will have the key `DATABASE_URL`
+- `schema.sql` will define a table called `users`
+- Config files will be valid JSON
 
-## Core Concept
+These assumptions are never tested. They live in startup code, initialization logic, and configuration parsers — and they fail silently or catastrophically when a deployment drifts, a schema evolves, or a config is malformed.
 
-A faultbench test runs inside an isolated workspace:
+`pytest-faultbench` makes those assumptions explicit and testable.
 
-1. copy the target task/app directory to a temporary workspace
-2. apply one named mutation
-3. run the test against the mutated copy
-4. roll the mutation back
-5. remove the temporary workspace
-6. report whether the mutation caused a test failure and whether rollback succeeded
+---
 
-The original files are not mutated.
+## How It Works
+
+For each fault-injection test, the plugin:
+
+1. Copies the target directory into a temporary workspace
+2. Applies the named mutation to the copy
+3. Runs your test against the mutated workspace
+4. Rolls back the mutation and removes the workspace
+5. Reports what happened — what was affected, whether failures were detected, whether rollback succeeded
+
+The original files are never modified.
+
+---
 
 ## Installation
 
-From a local checkout:
-
 ```bash
-python -m pip install -e .
+pip install pytest-faultbench
 ```
 
-To run the Flask and FastAPI examples, install the optional example dependencies:
+Requires Python 3.10+ and pytest 7.0+.
+
+For Flask, FastAPI, and related examples:
 
 ```bash
-python -m pip install -e ".[examples]"
+pip install "pytest-faultbench[examples]"
 ```
+
+---
 
 ## Quickstart
 
-Write a test that declares a target workspace and marks the mutation to apply:
+Mutation tests are skipped by default. Run them explicitly:
+
+```bash
+pytest --faultbench
+```
+
+### Marker API
+
+Declare which mutation to apply using a marker. The plugin copies your workspace, applies the mutation, and injects the mutated path as `faultbench_workdir`.
 
 ```python
-from pathlib import Path
-
 import pytest
+from pathlib import Path
+from app import get_database_url
 
 
 @pytest.fixture
-def faultbench_task_dir() -> Path:
-    return Path("examples/config_app")
+def faultbench_task_dir(tmp_path: Path) -> Path:
+    """Tell faultbench which directory to copy and mutate."""
+    import shutil
+    dest = tmp_path / "my_app"
+    shutil.copytree(Path(__file__).parent, dest)
+    return dest
 
 
 @pytest.mark.faultbench(mutation="config_drift")
-def test_app_rejects_missing_database_url(faultbench_workdir: Path):
-    from app import get_database_url
-
+def test_config_drift_detected(faultbench_workdir: Path):
+    """config_drift renames DATABASE_URL to DB_URL.
+    The app must raise rather than start in a broken state."""
     with pytest.raises(RuntimeError, match="DATABASE_URL missing"):
         get_database_url(faultbench_workdir)
 ```
 
-Run faultbench tests explicitly:
+### Fixture API
 
-```bash
-pytest --faultbench
+For more control, use the `mutate` context manager directly:
+
+```python
+def test_schema_drift_with_context(mutate, tmp_path):
+    import shutil
+    from app import validate_schema
+
+    source = Path("examples/mini_app")
+    dest = tmp_path / "mini_app"
+    shutil.copytree(source, dest)
+
+    with mutate(dest, mutation="schema_drift") as work_dir:
+        with pytest.raises(RuntimeError, match="Schema may have drifted"):
+            validate_schema(work_dir)
 ```
 
-Tests using `mutate`, `faultbench_workdir`, or `@pytest.mark.faultbench` are skipped unless `--faultbench` is provided.
+---
 
-## Example Mutation Workflow
+## Mutations
 
-For a `config.json` file like:
+Three mutations are built in. Each operates on files inside the copied workspace and is fully reversed after the test.
 
-```json
-{
-  "DATABASE_URL": "sqlite:///app.db"
-}
+### `schema_drift`
+
+Renames every occurrence of `users` to `users_v2` in `schema.sql`.
+
+**Targets:** `schema.sql`
+
+**What it exposes:** whether schema validation, query setup, or startup code catches an unexpected table rename. Apps that silently accept schema drift will pass this test — which is itself a finding.
+
+```python
+@pytest.mark.faultbench(mutation="schema_drift")
+def test_schema_drift_detected(faultbench_workdir: Path):
+    with pytest.raises(RuntimeError, match="Schema may have drifted"):
+        validate_schema(faultbench_workdir)
 ```
 
-The `config_drift` mutation rewrites `DATABASE_URL` to `DB_URL` inside the temporary workspace. Your test can then assert that app startup fails clearly instead of silently continuing with invalid configuration.
+---
 
-## Example Terminal Output
+### `config_drift`
 
-```text
+Renames a required configuration key in `config.json`. Specifically renames `DATABASE_URL` → `DB_URL`, or `user_id` → `id` if `DATABASE_URL` is not present.
+
+**Targets:** `config.json`
+
+**What it exposes:** whether required config keys are validated at startup. Apps that start silently with missing config, or fall back to defaults without warning, will pass — again a finding.
+
+```python
+@pytest.mark.faultbench(mutation="config_drift")
+def test_config_drift_detected(faultbench_workdir: Path):
+    with pytest.raises(RuntimeError, match="DATABASE_URL missing"):
+        get_database_url(faultbench_workdir)
+```
+
+---
+
+### `malformed_config`
+
+Removes the final closing brace from `config.json`, producing invalid JSON.
+
+**Targets:** `config.json`
+
+**What it exposes:** whether config loading raises a clear parse error rather than crashing with an unhandled exception or starting in an undefined state.
+
+```python
+@pytest.mark.faultbench(mutation="malformed_config")
+def test_malformed_config_fails_cleanly(faultbench_workdir: Path):
+    import json
+    with pytest.raises(json.JSONDecodeError):
+        load_config(faultbench_workdir)
+```
+
+---
+
+## `expect_failure`
+
+When you expect a test to fail under a mutation (the fault is working as intended), use `expect_failure=True`. The plugin tracks whether the actual failure matched the expectation and reports a mismatch if it does not.
+
+```python
+@pytest.mark.faultbench(mutation="config_drift", expect_failure=True)
+def test_api_contract_drift_detected(faultbench_workdir: Path):
+    with pytest.raises(KeyError, match="API Contract Violation"):
+        process_user(faultbench_workdir)
+```
+
+---
+
+## Terminal Output
+
+After a `--faultbench` run, a summary appears at the end of the pytest output:
+
+```
 ================ FaultBench Summary ================
 
+Mutation: schema_drift
+Tests affected: 2
+Failures expected: 0
+Failures actual: 0
+Behavior matched expectation: YES
+Rollback successful: YES
+
 Mutation: config_drift
-Tests affected: 1
-Failures detected: NO
-Rollback successful: YES
-
-Mutation: malformed_config
-Tests affected: 1
-Failures detected: NO
+Tests affected: 3
+Failures expected: 2
+Failures actual: 2
+Behavior matched expectation: YES
 Rollback successful: YES
 ```
 
-`Failures detected: NO` means no test failed while that mutation was active. That can be expected if the test asserts graceful handling, or it can signal a resilience gap if the mutation should have been detected by the application.
+`Behavior matched expectation: NO` means either a test failed when it was not expected to, or a test passed when it should have failed — both are signal worth investigating.
 
-## Continuous Integration
+---
 
-Running FaultBench in CI proves your app's resilience assumptions in a clean, non-local environment. Because it is a simple pytest plugin, integration is trivial:
+## Adding a Custom Mutation
 
-```yaml
-# .github/workflows/tests.yml
-name: Tests
-on: [push, pull_request]
+Import `MUTATION_REGISTRY` and register your class before pytest collects tests. The cleanest place is your `conftest.py`.
 
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      
-      - run: pip install -e . pytest
-      - run: pytest -v
-      - run: pytest --faultbench -v
+```python
+# conftest.py
+from pathlib import Path
+from pytest_faultbench.mutations.base import BaseMutation
+from pytest_faultbench.mutations import MUTATION_REGISTRY
+
+
+class EnvFileMutation(BaseMutation):
+    """Remove DATABASE_URL from a .env file."""
+
+    def __init__(self):
+        self._original: str | None = None
+
+    def apply(self, work_dir: Path) -> None:
+        env_file = work_dir / ".env"
+        if not env_file.exists():
+            raise RuntimeError(f".env not found in {work_dir}")
+        self._original = env_file.read_text()
+        lines = [l for l in self._original.splitlines() if not l.startswith("DATABASE_URL")]
+        env_file.write_text("\n".join(lines))
+
+    def rollback(self, work_dir: Path) -> None:
+        if self._original is None:
+            return
+        (work_dir / ".env").write_text(self._original)
+        self._original = None
+
+
+MUTATION_REGISTRY["env_file_drift"] = EnvFileMutation
 ```
 
-**Why are mutation failures useful?**
+Then use it like any built-in:
 
-A mutation-caused failure in your application is often **GOOD**. It proves your tests successfully detected environmental breakage (like configuration drift or a missing schema). If a destructive mutation applies and causes *no* failures, it may indicate missing test coverage or hidden, dangerous assumptions that your app silently swallows. See [docs/ci.md](docs/ci.md) for more details.
+```python
+@pytest.mark.faultbench(mutation="env_file_drift")
+def test_missing_env_var_caught(faultbench_workdir: Path):
+    ...
+```
 
-## Real-world failure patterns
+---
 
-FaultBench helps you detect silent outages by demonstrating realistic environmental breakages across your tests. Rather than assuming the environment is static, it proves that your application correctly identifies:
+## Fixtures Reference
 
-- **Configuration Drift**: A local config drops required keys (e.g., `DATABASE_URL` renamed).
-- **Environment Variable Drift**: A deployment orchestrator silently mangles environment state (simulated by dynamically mapping mutated config files to `os.environ` inside your tests).
-- **API Contract Breaks**: A downstream microservice API suddenly changes its JSON response payload shape (e.g., `user_id` -> `id`), caught cleanly without complex mocking frameworks.
+### `faultbench_workdir`
 
-See [docs/examples.md](docs/examples.md) for these engineering-focused examples.
+An isolated, mutated copy of the directory returned by `faultbench_task_dir`. Automatically injected when using `@pytest.mark.faultbench`. Cleaned up after the test.
 
-## Supported Mutations
+### `faultbench_task_dir`
 
-- `schema_drift`: renames `users` to `users_v2` in `schema.sql`
-- `config_drift`: renames `DATABASE_URL` to `DB_URL` in `config.json`
-- `malformed_config`: removes the final closing brace from `config.json`
+Define this fixture in your test file or `conftest.py` to tell the plugin which directory to copy. Return a `Path`.
 
-See [docs/mutations.md](docs/mutations.md) for details.
+```python
+@pytest.fixture
+def faultbench_task_dir(tmp_path: Path) -> Path:
+    import shutil
+    dest = tmp_path / "my_app"
+    shutil.copytree(Path("src/my_app"), dest)
+    return dest
+```
 
-## Framework Compatibility
+### `mutate`
 
-`pytest-faultbench` does not use framework-specific adapters. It works through pytest fixtures and temporary workspaces.
+A context manager fixture for manual control over the workspace lifecycle.
 
-Current examples validate:
+```python
+def test_something(mutate, tmp_path):
+    with mutate(tmp_path / "my_app", mutation="schema_drift") as work_dir:
+        # work_dir is a mutated copy
+        # original is untouched
+        ...
+    # mutation is rolled back, workspace removed
+```
 
-- plain Python config loading
-- a minimal schema-backed app
-- Flask startup validation
-- FastAPI startup validation
+---
 
-See [docs/examples.md](docs/examples.md).
+## Examples
 
-## Project Philosophy
+The `examples/` directory contains runnable examples for common patterns.
 
-- Prefer small, realistic failure modes over broad simulation.
-- Keep pytest as the integration surface.
-- Keep mutations explicit and easy to inspect.
-- Keep reporting terminal-first and readable.
-- Avoid persistence, dashboards, telemetry, and framework-specific runtime hooks.
+| Example | Mutation used | What it tests |
+|---|---|---|
+| `examples/mini_app/` | `schema_drift` | Schema validation at app startup |
+| `examples/config_app/` | `config_drift`, `malformed_config` | Config key validation and parse error handling |
+| `examples/flask_app/` | `config_drift`, `malformed_config` | Flask app startup resilience |
+| `examples/fastapi_app/` | `config_drift`, `malformed_config` | FastAPI startup resilience |
+| `examples/real_world_patterns/env_var_drift/` | `config_drift` | Environment variable drift via config simulation |
+| `examples/real_world_patterns/api_contract_break/` | `config_drift`, `malformed_config` | API response contract validation |
+| `examples/real_world_patterns/sqlalchemy_config_break/` | `config_drift` | Database connection startup validation |
 
-## Roadmap
-
-Near-term:
-
-- document more realistic failure patterns
-- improve example coverage around common infrastructure assumptions
-- keep rollback behavior simple and well tested
-
-Later:
-
-- add carefully scoped mutations when backed by real use cases
-- improve contributor guidance for adding examples
-- evaluate packaging and release workflow once the core behavior settles
-
-Non-goals for now:
-
-- dashboards
-- databases
-- cloud execution
-- CI orchestration
-- plugin registries
-- telemetry
-
-## Contributing
-
-Start by reading:
-
-- [docs/architecture.md](docs/architecture.md)
-- [docs/mutations.md](docs/mutations.md)
-- [docs/examples.md](docs/examples.md)
-
-Development loop:
+Run any example:
 
 ```bash
-python -m pip install -e ".[examples]"
-pytest
-pytest --faultbench
+# Install example dependencies first
+pip install "pytest-faultbench[examples]"
+
+# Baseline (always runs)
+pytest examples/mini_app/
+
+# With fault injection
+pytest examples/mini_app/ --faultbench
 ```
 
-Keep contributions focused. New behavior should preserve workspace isolation, rollback safety, and minimal terminal reporting.
+---
+
+## Design Decisions
+
+**Mutations run against copies, never originals.** Every test gets a fresh copy of the workspace. The source directory is never touched. If a test crashes mid-mutation, the original is still intact.
+
+**Rollback is always attempted, even if the test fails.** The mutation's `rollback()` runs in a `finally` block. A test failure does not skip cleanup.
+
+**Mutation tests are skipped unless `--faultbench` is passed.** This keeps normal test runs fast. Fault injection tests are opt-in.
+
+**No randomness.** Each mutation is deterministic — the same input always produces the same mutated state. This makes failures reproducible and debuggable.
+
+---
+
+## What FaultBench Is Not
+
+- Not a fuzzer — mutations are explicit and deterministic, not randomly generated
+- Not a chaos engineering tool — it does not inject faults at runtime into running processes
+- Not a source-code mutation tester — it does not modify logic to find missing test coverage
+- Not a load testing tool — it does not simulate traffic or concurrency
+
+Its scope is narrow: validating whether your code detects environmental assumptions becoming invalid.
+
+---
+
+## License
+
+MIT
