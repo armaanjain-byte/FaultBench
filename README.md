@@ -37,7 +37,7 @@ The original files are never modified.
 ---
 
 ## Installation
-
+https://test.pypi.org/project/pytest-faultbench/
 ```bash
 pip install pytest-faultbench
 ```
